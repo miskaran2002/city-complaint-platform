@@ -1,0 +1,172 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  
+}
+
+// Enums
+enum Role {
+  CITIZEN
+  STAFF
+  ADMIN
+}
+
+enum ComplaintStatus {
+  PENDING
+  ASSIGNED
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+  REOPENED
+  CANCELLED
+  REJECTED
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  EMERGENCY
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+}
+
+// Models
+model User {
+  id           String        @id @default(cuid())
+  name         String
+  email        String        @unique
+  password     String
+  role         Role          @default(CITIZEN)
+  departmentId String?
+  isDeleted    Boolean       @default(false)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  department   Department?   @relation(fields: [departmentId], references: [id])
+  complaints   Complaint[]   @relation("CitizenComplaints")
+  assignments  Assignment[]  @relation("TechnicianAssignments")
+  assignedBy   Assignment[]  @relation("AdminAssignments")
+  statusLogs   StatusLog[]
+  payments     Payment[]
+  feedbacks    Feedback[]
+
+  @@index([email])
+}
+
+model Department {
+  id          String      @id @default(cuid())
+  name        String      @unique
+  code        String      @unique
+  description String?
+  createdAt   DateTime    @default(now())
+
+  users       User[]
+  categories  Category[]
+  complaints  Complaint[]
+}
+
+model Category {
+  id           String      @id @default(cuid())
+  name         String
+  departmentId String
+  description  String?
+  createdAt    DateTime    @default(now())
+
+  department   Department  @relation(fields: [departmentId], references: [id])
+  complaints   Complaint[]
+}
+
+model Complaint {
+  id           String          @id @default(cuid())
+  title        String
+  description  String
+  status       ComplaintStatus @default(PENDING)
+  priority     Priority        @default(LOW)
+  categoryId   String
+  departmentId String
+  citizenId    String
+  address      String
+  latitude     Float?
+  longitude    Float?
+  imageUrl     String?
+  slaHours     Int             @default(48)
+  deletedAt    DateTime?
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  category     Category        @relation(fields: [categoryId], references: [id])
+  department   Department      @relation(fields: [departmentId], references: [id])
+  citizen      User            @relation("CitizenComplaints", fields: [citizenId], references: [id])
+  
+  assignments  Assignment[]
+  statusLogs   StatusLog[]
+  payment      Payment?
+  feedback     Feedback?
+
+  @@index([status, categoryId])
+  @@index([departmentId, status])
+  @@index([citizenId])
+  @@index([deletedAt])
+}
+
+model Assignment {
+  id           String    @id @default(cuid())
+  complaintId  String
+  technicianId String
+  assignedById String
+  notes        String?
+  assignedAt   DateTime  @default(now())
+
+  complaint    Complaint @relation(fields: [complaintId], references: [id])
+  technician   User      @relation("TechnicianAssignments", fields: [technicianId], references: [id])
+  assigner     User      @relation("AdminAssignments", fields: [assignedById], references: [id])
+}
+
+model StatusLog {
+  id          String           @id @default(cuid())
+  complaintId String
+  changedById String
+  oldStatus   ComplaintStatus?
+  newStatus   ComplaintStatus
+  note        String?
+  createdAt   DateTime         @default(now())
+
+  complaint   Complaint        @relation(fields: [complaintId], references: [id])
+  changedBy   User             @relation(fields: [changedById], references: [id])
+}
+
+model Payment {
+  id            String        @id @default(cuid())
+  complaintId   String        @unique
+  citizenId     String
+  amount        Float
+  transactionId String        @unique
+  status        PaymentStatus @default(PENDING)
+  gateway       String
+  createdAt     DateTime      @default(now())
+
+  complaint     Complaint     @relation(fields: [complaintId], references: [id])
+  citizen       User          @relation(fields: [citizenId], references: [id])
+
+  @@index([transactionId])
+}
+
+model Feedback {
+  id          String    @id @default(cuid())
+  complaintId String    @unique
+  citizenId   String
+  rating      Int
+  comment     String?
+  createdAt   DateTime  @default(now())
+
+  complaint   Complaint @relation(fields: [complaintId], references: [id])
+  citizen     User      @relation(fields: [citizenId], references: [id])
+}

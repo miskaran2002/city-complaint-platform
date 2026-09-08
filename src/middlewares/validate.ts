@@ -1,8 +1,8 @@
 import { Request, Response, NextFunction } from 'express';
-import { AnyZodObject } from 'zod';
+import { ZodSchema } from 'zod';
 
 export const validate =
-  (schema: AnyZodObject) =>
+  (schema: ZodSchema) =>
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       await schema.parseAsync({
@@ -12,10 +12,11 @@ export const validate =
       });
       return next();
     } catch (error: any) {
-      const formattedErrors = error.errors?.map((err: any) => ({
-        field: err.path.join('.').replace('body.', ''),
-        message: err.message,
-      })) || [];
+      const formattedErrors =
+        error.errors?.map((err: any) => ({
+          field: err.path.join('.').replace('body.', ''),
+          message: err.message,
+        })) || [];
 
       return res.status(400).json({
         success: false,

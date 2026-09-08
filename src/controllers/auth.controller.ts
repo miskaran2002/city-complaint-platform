@@ -1,10 +1,12 @@
 import { Request, Response } from 'express';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
-import { prisma } from '../config/db.js';
+
 import { sendSuccess } from '../utils/ApiResponse.js';
 import { ApiError } from '../utils/ApiError.js';
 import { catchAsync } from '../utils/catchAsync.js';
+import { prisma } from '../config/db.js';
+
 
 export const register = catchAsync(async (req: Request, res: Response) => {
   const { name, email, password } = req.body;
@@ -50,15 +52,14 @@ export const login = catchAsync(async (req: Request, res: Response) => {
   const accessToken = jwt.sign(
     { id: user.id, email: user.email, role: user.role },
     process.env.JWT_ACCESS_SECRET!,
-    { expiresIn: process.env.JWT_ACCESS_EXPIRES_IN || '1d' }
+    { expiresIn: (process.env.JWT_ACCESS_EXPIRES_IN || '1d') as any }
   );
 
   const refreshToken = jwt.sign(
     { id: user.id },
     process.env.JWT_REFRESH_SECRET!,
-    { expiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d' }
+    { expiresIn: (process.env.JWT_REFRESH_EXPIRES_IN || '7d') as any }
   );
-
   return sendSuccess(res, 200, 'Login successful', {
     user: {
       id: user.id,

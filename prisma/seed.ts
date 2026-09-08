@@ -19,7 +19,7 @@ async function main() {
     where: { email: 'admin@cityservice.com' },
     update: {},
     create: {
-      name: 'Super Admin',
+      name: 'Md Miskatujjaman Raihan',
       email: 'admin@cityservice.com',
       password: hashedPassword,
       role: Role.ADMIN,

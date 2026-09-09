@@ -1,8 +1,8 @@
 import { Router } from 'express';
-import { createComplaint, getAllComplaints, getSingleComplaint } from '../controllers/complaint.controller.js';
+import { createComplaint, getAllComplaints, getSingleComplaint, updateComplaint } from '../controllers/complaint.controller.js';
 import { authenticate, authorize } from '../middlewares/auth.js';
 import { validate } from '../middlewares/validate.js';
-import { createComplaintSchema } from '../validations/complaint.validation.js';
+import { createComplaintSchema, updateComplaintSchema } from '../validations/complaint.validation.js';
 
 const router = Router();
 
@@ -21,5 +21,6 @@ router.post(
 // (The controller handles which data to show based on the user's role)
 router.get('/', getAllComplaints);
 router.get('/:id', getSingleComplaint);
+router.patch('/:id', validate(updateComplaintSchema), updateComplaint);
 
 export default router;

@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { createComplaint, getAllComplaints } from '../controllers/complaint.controller.js';
+import { createComplaint, getAllComplaints, getSingleComplaint } from '../controllers/complaint.controller.js';
 import { authenticate, authorize } from '../middlewares/auth.js';
 import { validate } from '../middlewares/validate.js';
 import { createComplaintSchema } from '../validations/complaint.validation.js';
@@ -20,5 +20,6 @@ router.post(
 // Any authenticated user can view complaints 
 // (The controller handles which data to show based on the user's role)
 router.get('/', getAllComplaints);
+router.get('/:id', getSingleComplaint);
 
 export default router;

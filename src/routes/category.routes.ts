@@ -7,6 +7,6 @@ import { createCategorySchema } from '../validations/category.validation.js';
 const router = Router();
 
 router.get('/', getAllCategories); // Anyone can view
-router.post('/', authenticate, authorize('ADMIN'), validate(createCategorySchema), createCategory); // Only Admin can create
+router.post('/', authenticate, authorize('CITY_ADMIN'), validate(createCategorySchema), createCategory); // Only Admin can create
 
 export default router;

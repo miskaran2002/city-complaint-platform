@@ -7,6 +7,6 @@ import { createDepartment,  getAllDepartments } from '../controllers/depatment.c
 const router = Router();
 
 router.get('/', getAllDepartments); // Anyone can view
-router.post('/', authenticate, authorize('ADMIN'), validate(createDepartmentSchema), createDepartment); // Only Admin can create
+router.post('/', authenticate, authorize('CITY_ADMIN'), validate(createDepartmentSchema), createDepartment); // Only Admin can create
 
 export default router;

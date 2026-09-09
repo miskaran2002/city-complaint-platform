@@ -75,7 +75,7 @@ export const getAllComplaints = catchAsync(async (req: AuthRequest, res: Respons
   if (sortBy) {
     orderBy[sortBy as string] = sortOrder === 'asc' ? 'asc' : 'desc';
   } else {
-    orderBy.createdAt = 'desc'; // বাই-ডিফল্ট নতুনগুলো আগে দেখাবে
+    orderBy.createdAt = 'desc'; // Default sorting by creation date (newest first)
   }
 
   // fetch data and total count from the database
@@ -105,4 +105,83 @@ export const getAllComplaints = catchAsync(async (req: AuthRequest, res: Respons
     },
     data: complaints
   });
+});
+
+// Add this below your existing functions (createComplaint & getAllComplaints)
+
+// 3. Get Single Complaint
+export const getSingleComplaint = catchAsync(async (req: AuthRequest, res: Response) => {
+  const id = req.params.id as string;
+
+  const complaint = await prisma.complaint.findUnique({
+    where: { id },
+    include: {
+      category: { select: { name: true } },
+      department: { select: { name: true } }
+    }
+  });
+
+  if (!complaint || complaint.deletedAt !== null) {
+    throw new ApiError(404, 'Complaint not found');
+  }
+
+  // Permission Rule: Citizen can only view their own complaint
+  if (req.user.role === 'CITIZEN' && complaint.citizenId !== req.user.id) {
+    throw new ApiError(403, 'You do not have permission to view this complaint');
+  }
+
+  return sendSuccess(res, 200, 'Complaint retrieved successfully', complaint);
+});
+
+// 4. Update Complaint (Citizen only)
+export const updateComplaint = catchAsync(async (req: AuthRequest, res: Response) => {
+  const id = req.params.id as string;
+  const updateData = req.body;
+
+  const complaint = await prisma.complaint.findUnique({ where: { id } });
+
+  if (!complaint || complaint.deletedAt !== null) {
+    throw new ApiError(404, 'Complaint not found');
+  }
+
+  // Permission Rule: Citizen can only update their own complaint
+  if (req.user.role === 'CITIZEN' && complaint.citizenId !== req.user.id) {
+    throw new ApiError(403, 'You do not have permission to update this complaint');
+  }
+
+  // Business Logic: Only allow update if status is still PENDING
+  if (complaint.status !== 'PENDING') {
+    throw new ApiError(400, 'You can only update complaints that are in PENDING status');
+  }
+
+  const updatedComplaint = await prisma.complaint.update({
+    where: { id },
+    data: updateData
+  });
+
+  return sendSuccess(res, 200, 'Complaint updated successfully', updatedComplaint);
+});
+
+// 5. Soft Delete Complaint
+export const deleteComplaint = catchAsync(async (req: AuthRequest, res: Response) => {
+  const id = req.params.id as string;
+
+  const complaint = await prisma.complaint.findUnique({ where: { id } });
+
+  if (!complaint || complaint.deletedAt !== null) {
+    throw new ApiError(404, 'Complaint not found');
+  }
+
+  // Permission Rule: Citizen can only delete their own complaint
+  if (req.user.role === 'CITIZEN' && complaint.citizenId !== req.user.id) {
+    throw new ApiError(403, 'You do not have permission to delete this complaint');
+  }
+
+  // Soft Delete: Just set the deletedAt timestamp instead of actual deletion
+  await prisma.complaint.update({
+    where: { id },
+    data: { deletedAt: new Date() } // Record the time of deletion
+  });
+
+  return sendSuccess(res, 200, 'Complaint deleted successfully', null);
 });

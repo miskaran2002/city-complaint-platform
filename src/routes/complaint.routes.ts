@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { createComplaint, getAllComplaints, getSingleComplaint, updateComplaint } from '../controllers/complaint.controller.js';
+import { createComplaint, deleteComplaint, getAllComplaints, getSingleComplaint, updateComplaint } from '../controllers/complaint.controller.js';
 import { authenticate, authorize } from '../middlewares/auth.js';
 import { validate } from '../middlewares/validate.js';
 import { createComplaintSchema, updateComplaintSchema } from '../validations/complaint.validation.js';
@@ -22,5 +22,6 @@ router.post(
 router.get('/', getAllComplaints);
 router.get('/:id', getSingleComplaint);
 router.patch('/:id', validate(updateComplaintSchema), updateComplaint);
+router.delete('/:id', authorize('ADMIN', 'CITIZEN'), deleteComplaint); // Only an ADMIN or CITIZEN can delete a complaint
 
 export default router;

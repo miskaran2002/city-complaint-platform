@@ -185,3 +185,67 @@ export const deleteComplaint = catchAsync(async (req: AuthRequest, res: Response
 
   return sendSuccess(res, 200, 'Complaint deleted successfully', null);
 });
+
+
+// 6. Assign Staff to a Complaint (Admin only)
+export const assignStaff = catchAsync(async (req: AuthRequest, res: Response) => {
+  const complaintId = req.params.id as string;
+  const { technicianId, notes } = req.body;
+  const assignerId = req.user.id;
+
+  // 1. Verify if the complaint exists
+  const complaint = await prisma.complaint.findUnique({
+    where: { id: complaintId }
+  });
+
+  if (!complaint || complaint.deletedAt !== null) {
+    throw new ApiError(404, 'Complaint not found');
+  }
+
+  // 2. Verify if the technician exists and is actually a STAFF
+  const technician = await prisma.user.findUnique({
+    where: { id: technicianId }
+  });
+
+  if (!technician || technician.role !== 'STAFF') {
+    throw new ApiError(400, 'Invalid technician ID or user is not a STAFF member');
+  }
+
+  // Business Logic: Technician must belong to the same department as the complaint
+  if (technician.departmentId !== complaint.departmentId) {
+    throw new ApiError(400, 'Technician does not belong to the complaint\'s department');
+  }
+
+  // 3. Perform Transaction (Create Assignment, Update Status, Create Log)
+  const [assignment, updatedComplaint, log] = await prisma.$transaction([
+    // A. Create the assignment record
+    prisma.assignment.create({
+      data: {
+        complaintId,
+        technicianId,
+        assignedById: assignerId,
+        notes
+      }
+    }),
+    // B. Auto-update complaint status to ASSIGNED
+    prisma.complaint.update({
+      where: { id: complaintId },
+      data: { status: 'ASSIGNED' }
+    }),
+    // C. Keep a record in StatusLog
+    prisma.statusLog.create({
+      data: {
+        complaintId,
+        changedById: assignerId,
+        oldStatus: complaint.status,
+        newStatus: 'ASSIGNED',
+        note: notes || 'Assigned to a technician'
+      }
+    })
+  ]);
+
+  return sendSuccess(res, 201, 'Staff assigned successfully', {
+    assignment,
+    complaint: updatedComplaint
+  });
+});

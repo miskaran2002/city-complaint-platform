@@ -27,3 +27,11 @@ export const updateComplaintSchema = z.object({
     imageUrl: z.string().url('Invalid image URL').optional(),
   }),
 });
+
+
+export const assignStaffSchema = z.object({
+  body: z.object({
+    technicianId: z.string().min(1, 'Technician ID is required'), 
+    notes: z.string().optional(),
+  }),
+});

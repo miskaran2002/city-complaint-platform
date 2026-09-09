@@ -1,8 +1,8 @@
 import { Router } from 'express';
-import { createComplaint, deleteComplaint, getAllComplaints, getSingleComplaint, updateComplaint } from '../controllers/complaint.controller.js';
+import { assignStaff, createComplaint, deleteComplaint, getAllComplaints, getSingleComplaint, updateComplaint } from '../controllers/complaint.controller.js';
 import { authenticate, authorize } from '../middlewares/auth.js';
 import { validate } from '../middlewares/validate.js';
-import { createComplaintSchema, updateComplaintSchema } from '../validations/complaint.validation.js';
+import { assignStaffSchema, createComplaintSchema, updateComplaintSchema } from '../validations/complaint.validation.js';
 
 const router = Router();
 
@@ -15,6 +15,14 @@ router.post(
   authorize('CITIZEN'),
   validate(createComplaintSchema),
   createComplaint
+);
+
+// Admin Workflow: Assign Staff
+router.post(
+  '/:id/assign', 
+  authorize('ADMIN'), 
+  validate(assignStaffSchema), 
+  assignStaff
 );
 
 // Any authenticated user can view complaints 

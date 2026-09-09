@@ -207,9 +207,9 @@ export const assignStaff = catchAsync(async (req: AuthRequest, res: Response) =>
     where: { id: technicianId }
   });
 
-  if (!technician || technician.role !== 'STAFF') {
-    throw new ApiError(400, 'Invalid technician ID or user is not a STAFF member');
-  }
+  if (!technician || technician.role !== 'TECHNICIAN') {
+  throw new ApiError(400, 'Invalid technician ID or user is not a TECHNICIAN');
+}
 
   // Business Logic: Technician must belong to the same department as the complaint
   if (technician.departmentId !== complaint.departmentId) {

@@ -10,8 +10,10 @@ datasource db {
 // Enums
 enum Role {
   CITIZEN
-  STAFF
-  ADMIN
+  DEPARTMENT_STAFF
+  TECHNICIAN
+  DEPARTMENT_MANAGER
+  CITY_ADMIN
 }
 
 enum ComplaintStatus {

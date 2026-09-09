@@ -11,22 +11,22 @@ const prisma = new PrismaClient({ adapter });
 async function main() {
   console.log('Seeding database...');
 
-  // 1. Password Hash for Admin
+  // 1. Password Hash for Users
   const hashedPassword = await bcrypt.hash('Admin@123456', 10);
 
-  // 2. Create Admin User
+  // 2. Create City Admin User
   const admin = await prisma.user.upsert({
     where: { email: 'admin@cityservice.com' },
     update: {},
     create: {
-      name: 'Md Miskatujjaman Raihan',
+      name: 'Md Rayhan Uddin',
       email: 'admin@cityservice.com',
       password: hashedPassword,
-      role: Role.ADMIN,
+      role: Role.CITY_ADMIN, // Updated from Role.ADMIN
     },
   });
 
-  console.log('Admin created:', admin.email);
+  console.log('City Admin created:', admin.email);
 
   // 3. Create Default Department & Categories
   const department = await prisma.department.upsert({
@@ -46,6 +46,21 @@ async function main() {
   });
 
   console.log('Department created:', department.name);
+
+  // 4. Create a Sample Technician (Linked to PWD Department)
+  const technician = await prisma.user.upsert({
+    where: { email: 'technician@cityservice.com' },
+    update: {},
+    create: {
+      name: 'Rafiqul Islam (Technician)',
+      email: 'technician@cityservice.com',
+      password: hashedPassword,
+      role: Role.TECHNICIAN, // Using the new TECHNICIAN role
+      departmentId: department.id, // Automatically linked to Public Works Department
+    },
+  });
+
+  console.log('Technician created:', technician.email);
   console.log('Seeding completed successfully!');
 }
 

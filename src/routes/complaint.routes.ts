@@ -1,35 +1,49 @@
 import { Router } from 'express';
-import { assignStaff, createComplaint, deleteComplaint, getAllComplaints, getSingleComplaint, updateComplaint } from '../controllers/complaint.controller.js';
+import { 
+  assignStaff, 
+  createComplaint, 
+  deleteComplaint, 
+  getAllComplaints, 
+  getSingleComplaint, 
+  updateComplaint 
+} from '../controllers/complaint.controller.js';
 import { authenticate, authorize } from '../middlewares/auth.js';
 import { validate } from '../middlewares/validate.js';
-import { assignStaffSchema, createComplaintSchema, updateComplaintSchema } from '../validations/complaint.validation.js';
+import { 
+  assignStaffSchema, 
+  createComplaintSchema, 
+  updateComplaintSchema 
+} from '../validations/complaint.validation.js';
 
 const router = Router();
 
 // Apply authentication middleware to all routes in this file
 router.use(authenticate);
 
-// Only a CITIZEN can create a complaint
+// 1. Only a CITIZEN can create a complaint
 router.post(
-  '/',
-  authorize('CITIZEN'),
-  validate(createComplaintSchema),
+  '/', 
+  authorize('CITIZEN'), 
+  validate(createComplaintSchema), 
   createComplaint
 );
 
-// Admin Workflow: Assign Staff
+// 2. CITY_ADMIN or DEPARTMENT_MANAGER can assign staff
 router.post(
   '/:id/assign', 
-  authorize('ADMIN'), 
+  authorize('CITY_ADMIN', 'DEPARTMENT_MANAGER'), 
   validate(assignStaffSchema), 
   assignStaff
 );
 
-// Any authenticated user can view complaints 
-// (The controller handles which data to show based on the user's role)
+// 3. View routes (Authenticated users can view, controller handles role-based logic)
 router.get('/', getAllComplaints);
 router.get('/:id', getSingleComplaint);
+
+// 4. Update complaint (Citizen can update their own PENDING complaint)
 router.patch('/:id', validate(updateComplaintSchema), updateComplaint);
-router.delete('/:id', authorize('ADMIN', 'CITIZEN'), deleteComplaint); // Only an ADMIN or CITIZEN can delete a complaint
+
+// 5. Delete complaint (Only CITY_ADMIN or the respective CITIZEN can delete)
+router.delete('/:id', authorize('CITY_ADMIN', 'CITIZEN'), deleteComplaint);
 
 export default router;

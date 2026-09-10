@@ -161,11 +161,15 @@ export const deleteComplaint = catchAsync(async (req: AuthRequest, res: Response
 });
 
 
-// 6. Assign Staff to a Complaint (Admin only)
+// 6. Assign Staff to a Complaint (Admin, Manager, Staff)
 export const assignStaff = catchAsync(async (req: AuthRequest, res: Response) => {
   const complaintId = req.params.id as string;
   const { technicianId, notes } = req.body;
+  
+  // 🔴 Update: Extract role and departmentId from req.user 🔴
   const assignerId = req.user.id;
+  const assignerRole = req.user.role;
+  const assignerDeptId = req.user.departmentId;
 
   // 1. Verify if the complaint exists
   const complaint = await prisma.complaint.findUnique({
@@ -176,14 +180,21 @@ export const assignStaff = catchAsync(async (req: AuthRequest, res: Response) =>
     throw new ApiError(404, 'Complaint not found');
   }
 
-  // 2. Verify if the technician exists and is actually a STAFF
+  // 🔴 Update: Security Check - Manager/Staff can only assign to their own department's complaints 🔴
+  if (assignerRole !== 'CITY_ADMIN') {
+    if (assignerDeptId !== complaint.departmentId) {
+      throw new ApiError(403, 'You can only assign staff to complaints within your own department');
+    }
+  }
+
+  // 2. Verify if the technician exists and is actually a TECHNICIAN
   const technician = await prisma.user.findUnique({
     where: { id: technicianId }
   });
 
   if (!technician || technician.role !== 'TECHNICIAN') {
-  throw new ApiError(400, 'Invalid technician ID or user is not a TECHNICIAN');
-}
+    throw new ApiError(400, 'Invalid technician ID or user is not a TECHNICIAN');
+  }
 
   // Business Logic: Technician must belong to the same department as the complaint
   if (technician.departmentId !== complaint.departmentId) {
@@ -220,6 +231,62 @@ export const assignStaff = catchAsync(async (req: AuthRequest, res: Response) =>
 
   return sendSuccess(res, 201, 'Staff assigned successfully', {
     assignment,
+    complaint: updatedComplaint
+  });
+});
+// 7. Update Complaint Status by Technician (IN_PROGRESS or RESOLVED)
+export const updateComplaintStatus = catchAsync(async (req: AuthRequest, res: Response) => {
+  const complaintId = req.params.id as string;
+  const { status, note } = req.body;
+  const technicianId = req.user.id;
+
+  // 1. Validate the status input
+  if (!['IN_PROGRESS', 'RESOLVED'].includes(status)) {
+    throw new ApiError(400, 'Invalid status update. Only IN_PROGRESS or RESOLVED are allowed.');
+  }
+
+  // 2. Check the complaint
+
+  const complaint = await prisma.complaint.findUnique({
+    where: { id: complaintId }
+  });
+
+  if (!complaint || complaint.deletedAt !== null) {
+    throw new ApiError(404, 'Complaint not found');
+  }
+
+  // 3. Security Check: Is this complaint actually assigned to this technician?
+  const assignment = await prisma.assignment.findFirst({
+    where: {
+      complaintId,
+      technicianId
+    }
+  });
+
+  if (!assignment && req.user.role !== 'CITY_ADMIN') {
+    throw new ApiError(403, 'You are not assigned to this complaint');
+  }
+
+  const oldStatus = complaint.status;
+
+  // 4. Update status and create log within a transaction
+  const [updatedComplaint, statusLog] = await prisma.$transaction([
+    prisma.complaint.update({
+      where: { id: complaintId },
+      data: { status }
+    }),
+    prisma.statusLog.create({
+      data: {
+        complaintId,
+        changedById: technicianId,
+        oldStatus,
+        newStatus: status,
+        note: note || `Status updated to ${status} by technician`
+      }
+    })
+  ]);
+
+  return sendSuccess(res, 200, `Complaint status updated to ${status} successfully`, {
     complaint: updatedComplaint
   });
 });

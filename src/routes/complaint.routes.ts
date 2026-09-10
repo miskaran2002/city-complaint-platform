@@ -5,7 +5,8 @@ import {
   deleteComplaint, 
   getAllComplaints, 
   getSingleComplaint, 
-  updateComplaint 
+  updateComplaint, 
+  updateComplaintStatus
 } from '../controllers/complaint.controller.js';
 import { authenticate, authorize } from '../middlewares/auth.js';
 import { validate } from '../middlewares/validate.js';
@@ -28,10 +29,10 @@ router.post(
   createComplaint
 );
 
-// 2. CITY_ADMIN or DEPARTMENT_MANAGER can assign staff
+// 2. 🔴 Update: CITY_ADMIN, DEPARTMENT_MANAGER, or DEPARTMENT_STAFF can assign staff 🔴
 router.post(
   '/:id/assign', 
-  authorize('CITY_ADMIN', 'DEPARTMENT_MANAGER'), 
+  authorize('CITY_ADMIN', 'DEPARTMENT_MANAGER', 'DEPARTMENT_STAFF'), 
   validate(assignStaffSchema), 
   assignStaff
 );
@@ -45,5 +46,12 @@ router.patch('/:id', validate(updateComplaintSchema), updateComplaint);
 
 // 5. Delete complaint (Only CITY_ADMIN or the respective CITIZEN can delete)
 router.delete('/:id', authorize('CITY_ADMIN', 'CITIZEN'), deleteComplaint);
+
+// 6. Update complaint status (Only TECHNICIAN or CITY_ADMIN can update status)
+router.patch(
+  '/:id/status', 
+  authorize('TECHNICIAN', 'CITY_ADMIN'), 
+  updateComplaintStatus
+);
 
 export default router;

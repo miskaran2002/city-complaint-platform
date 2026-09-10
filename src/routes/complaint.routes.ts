@@ -16,6 +16,8 @@ import {
   createComplaintSchema, 
   updateComplaintSchema 
 } from '../validations/complaint.validation.js';
+import { upload } from '../middlewares/upload.js';
+
 
 const router = Router();
 
@@ -61,6 +63,16 @@ router.post(
   '/:id/feedback',
   authorize('CITIZEN'),
   submitFeedback
+);
+
+
+//8. Only a CITIZEN can create a complaint
+router.post(
+  '/', 
+  authorize('CITIZEN'), 
+  upload.single('image'), // 🔴 image  🔴
+  validate(createComplaintSchema), 
+  createComplaint
 );
 
 export default router;

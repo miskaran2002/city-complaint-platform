@@ -4,11 +4,14 @@ import { sendSuccess } from '../utils/ApiResponse.js';
 import { catchAsync } from '../utils/catchAsync.js';
 import { ApiError } from '../utils/ApiError.js';
 import { AuthRequest } from '../middlewares/auth.js';
+import { uploadToCloudinary } from '../utils/uploadToCloudinary.js';
+
+
 
 // 1. Create a new Complaint
 export const createComplaint = catchAsync(async (req: AuthRequest, res: Response) => {
-  const citizenId = req.user.id; // logged in -citizen ID
-  const { title, description, categoryId, address, latitude, longitude, imageUrl, priority } = req.body;
+  const citizenId = req.user.id; // logged in - citizen ID
+  const { title, description, categoryId, address, latitude, longitude, priority } = req.body;
 
   // check if the category exists and get its departmentId
   const category = await prisma.category.findUnique({
@@ -17,6 +20,13 @@ export const createComplaint = catchAsync(async (req: AuthRequest, res: Response
 
   if (!category) {
     throw new ApiError(404, 'Category not found');
+  }
+
+  // 🔴 Handle image upload: if a file is provided by Postman or frontend 🔴
+  let imageUrl = req.body.imageUrl; // if image is provided in the request body
+  if (req.file) {
+    // Upload the image to Cloudinary and get the secure URL
+    imageUrl = await uploadToCloudinary(req.file.buffer, 'city-complaints');
   }
 
   // create the complaint (department ID will be automatically added from the category)
@@ -28,9 +38,9 @@ export const createComplaint = catchAsync(async (req: AuthRequest, res: Response
       departmentId: category.departmentId, 
       citizenId,
       address,
-      latitude,
-      longitude,
-      imageUrl,
+      latitude: latitude ? parseFloat(latitude) : null,   // string to float conversion for latitude
+      longitude: longitude ? parseFloat(longitude) : null, // string to float conversion for longitude
+      imageUrl, // cloudainary with secure URL
       priority: priority || 'LOW'
     }
   });
@@ -80,7 +90,6 @@ export const getAllComplaints = catchAsync(async (req: AuthRequest, res: Respons
     data: complaints
   });
 });
-
 // Add this below your existing functions (createComplaint & getAllComplaints)
 
 // 3. Get Single Complaint
@@ -343,3 +352,7 @@ export const submitFeedback = catchAsync(async (req: AuthRequest, res: Response)
 
   return sendSuccess(res, 201, 'Feedback submitted successfully', feedback);
 });
+
+
+
+

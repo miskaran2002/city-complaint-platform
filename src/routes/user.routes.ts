@@ -7,6 +7,6 @@ import { updateProfileSchema } from '../validations/user.validation.js';
 const router = Router();
 
 router.get('/me', authenticate, getMe);
-router.patch('/me', authenticate, validate(updateProfileSchema), updateMe); // নতুন রাউট
+router.patch('/me', authenticate, validate(updateProfileSchema), updateMe); 
 
 export default router;

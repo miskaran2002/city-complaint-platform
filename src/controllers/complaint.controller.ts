@@ -40,68 +40,42 @@ export const createComplaint = catchAsync(async (req: AuthRequest, res: Response
 
 // 2. Get All Complaints (With Pagination, Filter, Search, and Role-based access)
 export const getAllComplaints = catchAsync(async (req: AuthRequest, res: Response) => {
-  // Pagination setup
-  const page = parseInt(req.query.page as string) || 1;
-  const limit = parseInt(req.query.limit as string) || 10;
-  const skip = (page - 1) * limit;
+  const { role, id: userId, departmentId } = req.user;
+  
+  // 1. url into query parameters for filtering
+  const { status, priority } = req.query; 
 
-  // Query parameters for filter & search
-  const { status, categoryId, searchTerm, sortBy, sortOrder } = req.query;
+  //2. Initialize the where condition for Prisma query
+  let whereCondition: any = { deletedAt: null }; 
 
-  // Where condition setup
-  const where: any = {
-    deletedAt: null // Only fetch complaints that are not soft-deleted
-  };
+  // 2. Role-based Access Logic
+  if (role === 'CITIZEN') {
+    whereCondition.citizenId = userId; 
+  } else if (role === 'DEPARTMENT_MANAGER' || role === 'DEPARTMENT_STAFF' || role === 'TECHNICIAN') {
+    whereCondition.departmentId = departmentId;
+  }
+  //for CITY_ADMIN, no additional filtering is needed; they can see all complaints
 
-  // 🔴 Role-based logic: If the user is a citizen, only show their complaints
-  if (req.user.role === 'CITIZEN') {
-    where.citizenId = req.user.id;
+  // 3. 🔴 search/filter logic 🔴
+  if (status) {
+    whereCondition.status = status;
+  }
+  if (priority) {
+    whereCondition.priority = priority;
   }
 
-  // Filters
-  if (status) where.status = status;
-  if (categoryId) where.categoryId = categoryId;
+  // 4. do the actual query to get complaints based on the constructed where condition
+  const complaints = await prisma.complaint.findMany({
+    where: whereCondition,
+    // include related data for better context
+    orderBy: { createdAt: 'desc' }
+  });
 
-  // search functionality: search in title and description (case-insensitive)
-  if (searchTerm) {
-    where.OR = [
-      { title: { contains: searchTerm as string, mode: 'insensitive' } },
-      { description: { contains: searchTerm as string, mode: 'insensitive' } }
-    ];
-  }
-
-  // Sorting setup
-  const orderBy: any = {};
-  if (sortBy) {
-    orderBy[sortBy as string] = sortOrder === 'asc' ? 'asc' : 'desc';
-  } else {
-    orderBy.createdAt = 'desc'; // Default sorting by creation date (newest first)
-  }
-
-  // fetch data and total count from the database
-  const [complaints, total] = await Promise.all([
-    prisma.complaint.findMany({
-      where,
-      skip,
-      take: limit,
-      orderBy,
-      include: { // include related category and department names for better context
-        category: { select: { name: true } },
-        department: { select: { name: true } }
-      }
-    }),
-    prisma.complaint.count({ where })
-  ]);
-
-  // return the response with pagination meta
-  return res.status(200).json({
+  res.status(200).json({
     success: true,
     message: 'Complaints retrieved successfully',
     meta: {
-      page,
-      limit,
-      total,
-      totalPages: Math.ceil(total / limit)
+      total: complaints.length,
     },
     data: complaints
   });

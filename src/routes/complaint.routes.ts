@@ -17,6 +17,7 @@ import {
   updateComplaintSchema 
 } from '../validations/complaint.validation.js';
 import { upload } from '../middlewares/upload.js';
+import { complaintLimiter } from '../middlewares/rateLimiter.js';
 
 
 const router = Router();
@@ -28,6 +29,7 @@ router.use(authenticate);
 router.post(
   '/', 
   authorize('CITIZEN'), 
+  complaintLimiter,
   validate(createComplaintSchema), 
   createComplaint
 );

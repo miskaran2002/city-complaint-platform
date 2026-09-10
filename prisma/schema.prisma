@@ -59,6 +59,7 @@ model User {
   statusLogs   StatusLog[]
   payments     Payment[]
   feedbacks    Feedback[]
+  auditLogs AuditLog[]
 
   @@index([email])
 }
@@ -110,6 +111,7 @@ model Complaint {
   
   assignments  Assignment[]
   statusLogs   StatusLog[]
+  auditLogs AuditLog[]
   payment      Payment?
   feedback     Feedback?
 
@@ -171,4 +173,22 @@ model Feedback {
 
   complaint   Complaint @relation(fields: [complaintId], references: [id])
   citizen     User      @relation(fields: [citizenId], references: [id])
+}
+
+model AuditLog {
+  id          String   @id @default(uuid())
+  complaintId String
+  complaint   Complaint @relation(fields: [complaintId], references: [id], onDelete: Cascade)
+  
+  actorId     String   // who performed the action (User ID)
+  actor       User     @relation(fields: [actorId], references: [id])
+  
+  action      String   // the action performed (e.g., 'CREATED', 'ASSIGNED', 'STATUS_CHANGED')
+  oldValue    String?  // the previous value (if applicable)
+  newValue    String?  // the new value
+  note        String?  // additional note or comment
+  
+  createdAt   DateTime @default(now())
+
+  @@index([complaintId])
 }

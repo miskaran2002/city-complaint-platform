@@ -5,6 +5,7 @@ import {
   deleteComplaint, 
   getAllComplaints, 
   getSingleComplaint, 
+  submitFeedback, 
   updateComplaint, 
   updateComplaintStatus
 } from '../controllers/complaint.controller.js';
@@ -52,6 +53,14 @@ router.patch(
   '/:id/status', 
   authorize('TECHNICIAN', 'CITY_ADMIN'), 
   updateComplaintStatus
+);
+
+
+// 7. Submit Citizen Feedback (Only CITIZEN can submit)
+router.post(
+  '/:id/feedback',
+  authorize('CITIZEN'),
+  submitFeedback
 );
 
 export default router;

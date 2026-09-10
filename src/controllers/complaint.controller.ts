@@ -290,3 +290,56 @@ export const updateComplaintStatus = catchAsync(async (req: AuthRequest, res: Re
     complaint: updatedComplaint
   });
 });
+
+
+// 8. Submit Feedback (Citizen Only)
+export const submitFeedback = catchAsync(async (req: AuthRequest, res: Response) => {
+  const complaintId = req.params.id as string;
+  const citizenId = req.user.id;
+  const { rating, comment } = req.body;
+
+  // 1. Validate rating input
+  if (rating < 1 || rating > 5) {
+    throw new ApiError(400, 'Rating must be a number between 1 and 5');
+  }
+
+  // 2. Validate complaint
+  const complaint = await prisma.complaint.findUnique({
+    where: { id: complaintId }
+  });
+
+  if (!complaint || complaint.deletedAt !== null) {
+    throw new ApiError(404, 'Complaint not found');
+  }
+
+  // 3. Security Check: Is this the citizen's own complaint?
+  if (complaint.citizenId !== citizenId) {
+    throw new ApiError(403, 'You can only submit feedback for your own complaints');
+  }
+
+  // 4. Logic Check: Can feedback be submitted for this complaint?
+  if (complaint.status !== 'RESOLVED' && complaint.status !== 'CLOSED') {
+    throw new ApiError(400, 'Feedback can only be submitted for RESOLVED complaints');
+  }
+
+  // 5. Double Feedback Check: Has feedback already been submitted?
+  const existingFeedback = await prisma.feedback.findUnique({
+    where: { complaintId }
+  });
+
+  if (existingFeedback) {
+    throw new ApiError(400, 'Feedback has already been submitted for this complaint');
+  }
+
+  // 6. Submit Feedback
+  const feedback = await prisma.feedback.create({
+    data: {
+      complaintId,
+      citizenId,
+      rating,
+      comment
+    }
+  });
+
+  return sendSuccess(res, 201, 'Feedback submitted successfully', feedback);
+});

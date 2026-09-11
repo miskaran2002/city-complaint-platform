@@ -8,6 +8,8 @@ import adminRoutes from './routes/admin.routes.js';
 import categoryRoutes from './routes/category.routes.js';
 import departmentRoutes from './routes/department.routes.js';
 import complaintRoutes from './routes/complaint.routes.js';
+import paymentRoutes from './routes/payment.routes.js';
+
 
 const app: Application = express();
 
@@ -23,6 +25,7 @@ app.use(helmet());
  app.use('/api/v1/departments', departmentRoutes); // Anyone can view
  app.use('/api/v1/categories', categoryRoutes); // Anyone can view
  app.use('/api/v1/complaints', complaintRoutes);
+ app.use('/api/v1/payments', paymentRoutes ) 
 
 // Global Error Handler
 app.use(globalErrorHandler);

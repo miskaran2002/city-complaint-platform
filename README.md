@@ -64,28 +64,17 @@ Follow these steps to set up the project locally.
 ```bash
 git clone <your-repository-url>
 cd <your-project-folder>
+```
 
-
-
-
-
-
-
-## 🚀 Installation & Setup Instructions
-
-Follow these steps to set up the project locally.
-
-### 1. Prerequisites
-- Node.js (v18 or higher)
-- PostgreSQL installed and running locally (or a cloud instance)
-
-### 2. Clone the Repository
+### 3. Install Dependencies
 ```bash
-git clone <your-repository-url>
-cd <your-project-folder>
+npm install
+```
 
-3. Install DependenciesBashnpm install
-4. Environment Variables (.env)Create a .env file in the root directory and configure the following variables:Code snippetPORT=5000
+### 4. Environment Variables (.env)
+Create a `.env` file in the root directory and configure the following variables:
+```env
+PORT=5000
 DATABASE_URL="postgresql://USERNAME:PASSWORD@localhost:5432/YOUR_DATABASE_NAME?schema=public"
 
 # JWT Configuration
@@ -99,7 +88,77 @@ BKASH_PASSWORD="your_sandbox_password"
 BKASH_APP_KEY="your_app_key"
 BKASH_APP_SECRET="your_app_secret"
 BKASH_CALLBACK_URL="http://localhost:5000/api/v1/payments/webhook"
-5. Prisma ORM SetupGenerate the Prisma Client and run database migrations:Bashnpx prisma generate
+```
+
+### 5. Prisma ORM Setup
+Generate the Prisma Client and run database migrations:
+```bash
+npx prisma generate
 npx prisma migrate dev --name init
-6. Start the ServerRun the development server:Bashnpm run dev
-The server should now be running on http://localhost:5000.📡 API Documentation🔐 AuthenticationMethodEndpointDescriptionPOST/api/v1/auth/registerRegister a new user (Citizen by default)POST/api/v1/auth/loginAuthenticate user and get access tokenPOST/api/v1/auth/refresh-tokenGenerate a new access token👤 User / ProfileMethodEndpointDescriptionGET/api/v1/users/meGet logged-in user profilePATCH/api/v1/users/meUpdate profile information🏢 Core Resources (Complaints, Departments, Categories)(Supports pagination and filtering: ?page=1&limit=10&status=active)MethodEndpointDescriptionPOST/api/v1/resourcesCreate a new resource (e.g., Complaint)GET/api/v1/resourcesGet all resources (with filters)GET/api/v1/resources/:idGet a specific resource by IDPATCH/api/v1/resources/:idUpdate resource detailsDELETE/api/v1/resources/:idSoft delete a resourceGET/api/v1/resources/search?q=keywordSearch resources⚙️ Business OperationsMethodEndpointDescriptionPOST/api/v1/resources/:id/assignAssign a complaint to a TechnicianPATCH/api/v1/resources/:id/statusUpdate complaint status (e.g., In Progress)POST/api/v1/resources/:id/cancelCancel a service requestGET/api/v1/resources/my-assignedGet tasks assigned to the logged-in technician💳 Payment Integration (bKash)MethodEndpointDescriptionPOST/api/v1/payments/initiateInitiate an emergency payment sessionPOST/api/v1/payments/webhookExecute payment (bKash callback URL)GET/api/v1/payments/:idCheck payment status🛡️ Admin OperationsMethodEndpointDescriptionGET/api/v1/admin/usersView all system users (Pagination & Search)PATCH/api/v1/admin/users/:id/roleUpdate user roles (e.g., promote to Admin)GET/api/v1/admin/dashboard-statsView total complaints, revenue, and user statsGET/api/v1/admin/audit-logsTrack recent system changes and activities👨‍💻 Developed ByMd Rayhan UddinComputer Science and Engineering, University of Barishal
+```
+
+### 6. Start the Server
+Run the development server:
+```bash
+npm run dev
+```
+The server should now be running on `http://localhost:5000`.
+
+---
+
+## 📡 API Documentation
+
+### 🔐 Authentication
+| Method | Endpoint | Description |
+|---|---|---|
+| POST | `/api/v1/auth/register` | Register a new user (Citizen by default) |
+| POST | `/api/v1/auth/login` | Authenticate user and get access token |
+| POST | `/api/v1/auth/refresh-token` | Generate a new access token |
+
+### 👤 User / Profile
+| Method | Endpoint | Description |
+|---|---|---|
+| GET | `/api/v1/users/me` | Get logged-in user profile |
+| PATCH | `/api/v1/users/me` | Update profile information |
+
+### 🏢 Core Resources (Complaints, Departments, Categories)
+_Supports pagination and filtering: `?page=1&limit=10&status=active`_
+
+| Method | Endpoint | Description |
+|---|---|---|
+| POST | `/api/v1/resources` | Create a new resource (e.g., Complaint) |
+| GET | `/api/v1/resources` | Get all resources (with filters) |
+| GET | `/api/v1/resources/:id` | Get a specific resource by ID |
+| PATCH | `/api/v1/resources/:id` | Update resource details |
+| DELETE | `/api/v1/resources/:id` | Soft delete a resource |
+| GET | `/api/v1/resources/search?q=keyword` | Search resources |
+
+### ⚙️ Business Operations
+| Method | Endpoint | Description |
+|---|---|---|
+| POST | `/api/v1/resources/:id/assign` | Assign a complaint to a Technician |
+| PATCH | `/api/v1/resources/:id/status` | Update complaint status (e.g., In Progress) |
+| POST | `/api/v1/resources/:id/cancel` | Cancel a service request |
+| GET | `/api/v1/resources/my-assigned` | Get tasks assigned to the logged-in technician |
+
+### 💳 Payment Integration (bKash)
+| Method | Endpoint | Description |
+|---|---|---|
+| POST | `/api/v1/payments/initiate` | Initiate an emergency payment session |
+| POST | `/api/v1/payments/webhook` | Execute payment (bKash callback URL) |
+| GET | `/api/v1/payments/:id` | Check payment status |
+
+### 🛡️ Admin Operations
+| Method | Endpoint | Description |
+|---|---|---|
+| GET | `/api/v1/admin/users` | View all system users (Pagination & Search) |
+| PATCH | `/api/v1/admin/users/:id/role` | Update user roles (e.g., promote to Admin) |
+| GET | `/api/v1/admin/dashboard-stats` | View total complaints, revenue, and user stats |
+| GET | `/api/v1/admin/audit-logs` | Track recent system changes and activities |
+
+---
+
+## 👨‍💻 Developed By
+**Md Rayhan Uddin**
+Computer Science and Engineering, University of Barishal
+rayhanuddin.cse8.bu@gmail.com

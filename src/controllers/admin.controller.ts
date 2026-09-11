@@ -6,7 +6,7 @@ import { sendSuccess } from '../utils/ApiResponse.js';
 import { ApiError } from '../utils/ApiError.js';
 import { AuthRequest } from '../middlewares/auth.js';
 
-// Get all users
+// ১. Get all users (with pagination & search)
 export const getAllUsers = catchAsync(async (req: AuthRequest, res: Response) => {
   const page = Number(req.query.page) || 1;
   const limit = Number(req.query.limit) || 10;
@@ -15,7 +15,6 @@ export const getAllUsers = catchAsync(async (req: AuthRequest, res: Response) =>
   const role = req.query.role as string;
   const search = req.query.search as string;
 
-  // dynamically build the where clause based on query parameters
   const whereClause: any = { isDeleted: false };
 
   if (role) {
@@ -29,7 +28,6 @@ export const getAllUsers = catchAsync(async (req: AuthRequest, res: Response) =>
     ];
   }
 
-  // fetch data and total count together
   const [users, total] = await Promise.all([
     prisma.user.findMany({
       where: whereClause,
@@ -58,18 +56,16 @@ export const getAllUsers = catchAsync(async (req: AuthRequest, res: Response) =>
   });
 });
 
-// Update user role
+// ২. Update user role
 export const updateUserRole = catchAsync(async (req: AuthRequest, res: Response) => {
   const targetUserId = req.params.id as string;
   const { role } = req.body;
   const currentAdminId = req.user.id;
 
-  // Security check: Admin should not be able to change their own role
   if (targetUserId === currentAdminId) {
     throw new ApiError(403, 'Action forbidden: You cannot change your own role.');
   }
 
-  // Check if the target user exists
   const targetUser = await prisma.user.findUnique({
     where: { id: targetUserId },
   });
@@ -78,7 +74,6 @@ export const updateUserRole = catchAsync(async (req: AuthRequest, res: Response)
     throw new ApiError(404, 'User not found or deactivated.');
   }
 
-  // Update the user's role
   const updatedUser = await prisma.user.update({
     where: { id: targetUserId },
     data: { role },
@@ -91,4 +86,69 @@ export const updateUserRole = catchAsync(async (req: AuthRequest, res: Response)
   });
 
   return sendSuccess(res, 200, 'User role updated successfully', updatedUser);
+});
+
+// ৩. Get Dashboard Statistics
+export const getDashboardStats = catchAsync(async (req: AuthRequest, res: Response) => {
+  const totalUsers = await prisma.user.count({ where: { isDeleted: false } });
+  const totalComplaints = await prisma.complaint.count();
+  
+  const pendingComplaints = await prisma.complaint.count({ where: { status: 'PENDING' } });
+  const inProgressComplaints = await prisma.complaint.count({ where: { status: 'IN_PROGRESS' } });
+  const resolvedComplaints = await prisma.complaint.count({ where: { status: 'RESOLVED' } });
+
+  const successfulPayments = await prisma.payment.count({ where: { status: 'PAID' } });
+  const paymentsSum = await prisma.payment.aggregate({
+    where: { status: 'PAID' },
+    _sum: { amount: true },
+  });
+
+  return sendSuccess(res, 200, 'Dashboard statistics retrieved successfully', {
+    users: { total: totalUsers },
+    complaints: {
+      total: totalComplaints,
+      pending: pendingComplaints,
+      inProgress: inProgressComplaints,
+      resolved: resolvedComplaints,
+    },
+    payments: {
+      successful: successfulPayments,
+      totalRevenue: paymentsSum._sum.amount || 0,
+    },
+  });
+});
+
+// ৪. Get Audit Logs (Track system changes)
+export const getAuditLogs = catchAsync(async (req: AuthRequest, res: Response) => {
+  // here we are fetching the latest 5 users and complaints to simulate audit logs
+  const recentUsers = await prisma.user.findMany({
+    take: 5,
+    orderBy: { createdAt: 'desc' },
+    select: { name: true, role: true, createdAt: true }
+  });
+
+  const recentComplaints = await prisma.complaint.findMany({
+    take: 5,
+    orderBy: { updatedAt: 'desc' },
+    select: { title: true, status: true, updatedAt: true }
+  });
+
+  // dynamically creating logs based on recent activities
+  const logs = [
+    ...recentUsers.map(user => ({
+      action: 'NEW_USER_JOINED',
+      details: `${user.name} joined the system as ${user.role}`,
+      timestamp: user.createdAt
+    })),
+    ...recentComplaints.map(comp => ({
+      action: 'COMPLAINT_UPDATED',
+      details: `Complaint "${comp.title.substring(0, 20)}..." is now ${comp.status}`,
+      timestamp: comp.updatedAt
+    }))
+  ];
+
+  // sorting logs by timestamp to show the latest activities first
+  logs.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+
+  return sendSuccess(res, 200, 'System audit logs retrieved successfully', logs);
 });

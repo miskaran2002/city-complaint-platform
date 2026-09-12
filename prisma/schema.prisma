@@ -45,8 +45,10 @@ model User {
   id           String        @id @default(cuid())
   name         String
   email        String        @unique
-  password     String
-  role         Role          @default(CITIZEN)
+  password     String?          // Nullable for social logins
+  role         Role          @default(CITIZEN) 
+  provider     String        @default("credentials") // ⬅️ new field: to track the login method (credentials, google, etc.)
+  googleId     String?       @unique                 // ⬅️ new field: to store Google ID for social login
   departmentId String?
   isDeleted    Boolean       @default(false)
   createdAt    DateTime      @default(now())

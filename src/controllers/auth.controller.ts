@@ -6,6 +6,8 @@ import { sendSuccess } from '../utils/ApiResponse.js';
 import { ApiError } from '../utils/ApiError.js';
 import { catchAsync } from '../utils/catchAsync.js';
 import { prisma } from '../config/db.js';
+import { OAuth2Client } from 'google-auth-library';
+
 
 export const register = catchAsync(async (req: Request, res: Response) => {
   // 1.req.boby with destructuring
@@ -48,6 +50,11 @@ export const login = catchAsync(async (req: Request, res: Response) => {
     throw new ApiError(401, 'Invalid email or password');
   }
 
+  // / 🔴 new check for google login
+if (!user.password) {
+  throw new ApiError(400, 'This account uses Google login. Please sign in with Google.');
+}
+
   const isPasswordMatched = await bcrypt.compare(password, user.password);
   if (!isPasswordMatched) {
     throw new ApiError(401, 'Invalid email or password');
@@ -78,6 +85,88 @@ export const login = catchAsync(async (req: Request, res: Response) => {
       email: user.email,
       role: user.role,
       departmentId: user.departmentId, // login response
+    },
+    accessToken,
+    refreshToken,
+  });
+});
+
+
+
+
+const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+
+export const googleLogin = catchAsync(async (req: Request, res: Response) => {
+  //1.from req.body, get the idToken
+  const { idToken } = req.body;
+
+  // 2. Verify the token with Google
+  const ticket = await googleClient.verifyIdToken({
+    idToken,
+    audience: process.env.GOOGLE_CLIENT_ID,
+  });
+
+  const payload = ticket.getPayload();
+  if (!payload || !payload.email) {
+    throw new ApiError(401, 'Invalid Google token');
+  }
+
+  const { email, name, sub: googleId } = payload;
+
+  // 3. Check if the user already exists in the database
+  let user = await prisma.user.findUnique({ where: { email } });
+
+  if (user) {
+    // 4.if the user exists, check if the account is deactivated
+    if (user.isDeleted) {
+      throw new ApiError(401, 'This account has been deactivated');
+    }
+    // googleId is not set, set it now for future logins
+    if (!user.googleId) {
+      user = await prisma.user.update({
+        where: { email },
+        data: { googleId, provider: 'google' },
+      });
+    }
+  } else {
+    // 4. if the user does not exist, create a new user with the Google info
+    user = await prisma.user.create({
+      data: {
+        name: name || 'Google User',
+        email,
+        googleId,
+        provider: 'google',
+        password: null, // no password since it's a social login
+        role: 'CITIZEN', // default role for new users
+      },
+    });
+  }
+
+  // 5. Generate access and refresh tokens for the user
+  const accessToken = jwt.sign(
+    {
+      id: user.id,
+      email: user.email,
+      role: user.role,
+      departmentId: user.departmentId,
+    },
+    process.env.JWT_ACCESS_SECRET!,
+    { expiresIn: (process.env.JWT_ACCESS_EXPIRES_IN || '1d') as any }
+  );
+
+  const refreshToken = jwt.sign(
+    { id: user.id },
+    process.env.JWT_REFRESH_SECRET!,
+    { expiresIn: (process.env.JWT_REFRESH_EXPIRES_IN || '7d') as any }
+  );
+
+  return sendSuccess(res, 200, 'Google login successful', {
+    user: {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      departmentId: user.departmentId,
     },
     accessToken,
     refreshToken,

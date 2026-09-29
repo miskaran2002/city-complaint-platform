@@ -6,7 +6,7 @@ import { sendSuccess } from '../utils/ApiResponse.js';
 import { ApiError } from '../utils/ApiError.js';
 import { AuthRequest } from '../middlewares/auth.js';
 
-// ১. Get all users (with pagination & search)
+// ১. Get all users (with pagination, search & department filtering)
 export const getAllUsers = catchAsync(async (req: AuthRequest, res: Response) => {
   const page = Number(req.query.page) || 1;
   const limit = Number(req.query.limit) || 10;
@@ -14,11 +14,21 @@ export const getAllUsers = catchAsync(async (req: AuthRequest, res: Response) =>
 
   const role = req.query.role as string;
   const search = req.query.search as string;
+  const queryDepartmentId = req.query.departmentId as string;
 
   const whereClause: any = { isDeleted: false };
 
   if (role) {
     whereClause.role = role;
+  }
+
+  // ⚠️ রুলস অনুযায়ী ফিল্টারিং:
+  // যদি লগইন করা ইউজার DEPARTMENT_STAFF হয়, তবে সে শুধু তার নিজের ডিপার্টমেন্টের ইউজার দেখতে পাবে
+  if (req.user?.role === 'DEPARTMENT_STAFF') {
+    whereClause.departmentId = req.user.departmentId;
+  } else if (queryDepartmentId) {
+    // অ্যাডমিন চাইলে কুয়েরি প্যারামিটার দিয়েও ফিল্টার করতে পারবে
+    whereClause.departmentId = queryDepartmentId;
   }
 
   if (search) {
@@ -36,6 +46,7 @@ export const getAllUsers = catchAsync(async (req: AuthRequest, res: Response) =>
         name: true,
         email: true,
         role: true,
+        departmentId: true, // 👈 departmentId সিলেক্ট করা হলো
         createdAt: true,
       },
       skip,

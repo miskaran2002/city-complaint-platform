@@ -13,19 +13,19 @@ import { Role } from '@prisma/client';
 
 const router = Router();
 
-// Apply authentication and authorization middleware to ALL admin routes
-router.use(authenticate, authorize(Role.CITY_ADMIN));
+// 1. Apply authentication middleware to all admin routes
+router.use(authenticate);
 
-// 1. Dashboard Statistics
-router.get('/dashboard-stats', getDashboardStats);
+// 2. Dashboard Statistics (only City Admin)
+router.get('/dashboard-stats', authorize(Role.CITY_ADMIN), getDashboardStats);
 
-// 2. Audit Logs (System Activity)
-router.get('/audit-logs', getAuditLogs);
+// 3. Audit Logs (only City Admin)
+router.get('/audit-logs', authorize(Role.CITY_ADMIN), getAuditLogs);
 
-// 3. Get all users (Supports query params: ?page=1&limit=10&role=CITIZEN&search=rahim)
-router.get('/users', getAllUsers);
+// 4. Get all users (City Admin and Department Staff can access)
+router.get('/users', authorize(Role.CITY_ADMIN, Role.DEPARTMENT_STAFF), getAllUsers);
 
-// 4. Update specific user role
-router.patch('/users/:id/role', validate(updateRoleSchema), updateUserRole);
+// 5. Update specific user role (only City Admin)
+router.patch('/users/:id/role', authorize(Role.CITY_ADMIN), validate(updateRoleSchema), updateUserRole);
 
 export default router;

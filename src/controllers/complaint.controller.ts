@@ -170,15 +170,31 @@ export const deleteComplaint = catchAsync(async (req: AuthRequest, res: Response
 });
 
 
+
+
+
+
+
+
 // 6. Assign Staff to a Complaint (Admin, Manager, Staff)
 export const assignStaff = catchAsync(async (req: AuthRequest, res: Response) => {
   const complaintId = req.params.id as string;
   const { technicianId, notes } = req.body;
   
-  // 🔴 Update: Extract role and departmentId from req.user 🔴
   const assignerId = req.user.id;
   const assignerRole = req.user.role;
-  const assignerDeptId = req.user.departmentId;
+
+  // 🔴 Update: Extract departmentId from the assigner user object 🔴
+  const assigner = await prisma.user.findUnique({
+    where: { id: assignerId },
+    select: { departmentId: true }
+  });
+
+  if (!assigner) {
+    throw new ApiError(404, 'Assigning user not found in database');
+  }
+
+  const assignerDeptId = assigner.departmentId;
 
   // 1. Verify if the complaint exists
   const complaint = await prisma.complaint.findUnique({
@@ -195,6 +211,15 @@ export const assignStaff = catchAsync(async (req: AuthRequest, res: Response) =>
       throw new ApiError(403, 'You can only assign staff to complaints within your own department');
     }
   }
+
+
+
+
+
+
+
+
+
 
   // 2. Verify if the technician exists and is actually a TECHNICIAN
   const technician = await prisma.user.findUnique({

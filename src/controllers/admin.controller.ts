@@ -22,12 +22,13 @@ export const getAllUsers = catchAsync(async (req: AuthRequest, res: Response) =>
     whereClause.role = role;
   }
 
-  // ⚠️ রুলস অনুযায়ী ফিল্টারিং:
-  // যদি লগইন করা ইউজার DEPARTMENT_STAFF হয়, তবে সে শুধু তার নিজের ডিপার্টমেন্টের ইউজার দেখতে পাবে
-  if (req.user?.role === 'DEPARTMENT_STAFF') {
+  // ⚠️ rule: If the logged-in user is DEPARTMENT_STAFF or DEPARTMENT_MANAGER,  // they can only see users from their own department.
+  // If the admin wants, they can also filter by departmentId via query parameter.
+
+  if (req.user?.role === 'DEPARTMENT_STAFF' || req.user?.role === 'DEPARTMENT_MANAGER') {
     whereClause.departmentId = req.user.departmentId;
   } else if (queryDepartmentId) {
-    // অ্যাডমিন চাইলে কুয়েরি প্যারামিটার দিয়েও ফিল্টার করতে পারবে
+    // admin can filter by departmentId if provided in the query
     whereClause.departmentId = queryDepartmentId;
   }
 
@@ -46,7 +47,7 @@ export const getAllUsers = catchAsync(async (req: AuthRequest, res: Response) =>
         name: true,
         email: true,
         role: true,
-        departmentId: true, // 👈 departmentId সিলেক্ট করা হলো
+        departmentId: true, // 👈 departmentId selected
         createdAt: true,
       },
       skip,

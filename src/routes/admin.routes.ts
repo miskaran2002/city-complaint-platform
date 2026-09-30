@@ -23,7 +23,7 @@ router.get('/dashboard-stats', authorize(Role.CITY_ADMIN), getDashboardStats);
 router.get('/audit-logs', authorize(Role.CITY_ADMIN), getAuditLogs);
 
 // 4. Get all users (City Admin and Department Staff can access)
-router.get('/users', authorize(Role.CITY_ADMIN, Role.DEPARTMENT_STAFF), getAllUsers);
+router.get('/users', authorize(Role.CITY_ADMIN, Role.DEPARTMENT_STAFF,Role.DEPARTMENT_MANAGER), getAllUsers);
 
 // 5. Update specific user role (only City Admin)
 router.patch('/users/:id/role', authorize(Role.CITY_ADMIN), validate(updateRoleSchema), updateUserRole);

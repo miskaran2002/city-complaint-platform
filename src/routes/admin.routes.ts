@@ -4,7 +4,8 @@ import {
   getAllUsers, 
   updateUserRole, 
   getDashboardStats, 
-  getAuditLogs 
+  getAuditLogs, 
+  toggleUserStatus
 } from '../controllers/admin.controller.js';
 import { authenticate, authorize } from '../middlewares/auth.js';
 import { validate } from '../middlewares/validate.js';
@@ -27,5 +28,6 @@ router.get('/users', authorize(Role.CITY_ADMIN, Role.DEPARTMENT_STAFF,Role.DEPAR
 
 // 5. Update specific user role (only City Admin)
 router.patch('/users/:id/role', authorize(Role.CITY_ADMIN), validate(updateRoleSchema), updateUserRole);
+router.patch('/users/:id/status', authorize(Role.CITY_ADMIN, Role.DEPARTMENT_MANAGER), toggleUserStatus);
 
 export default router;

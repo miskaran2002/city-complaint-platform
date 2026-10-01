@@ -48,6 +48,7 @@ export const getAllUsers = catchAsync(async (req: AuthRequest, res: Response) =>
         email: true,
         role: true,
         departmentId: true, // 👈 departmentId selected
+        isBanned: true,
         createdAt: true,
       },
       skip,
@@ -163,4 +164,22 @@ export const getAuditLogs = catchAsync(async (req: AuthRequest, res: Response) =
   logs.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 
   return sendSuccess(res, 200, 'System audit logs retrieved successfully', logs);
+});
+
+//5. Toggle User Ban/Unban Status
+export const toggleUserStatus = catchAsync(async (req: AuthRequest, res: Response) => {
+  const userId = req.params.id;
+
+  const user = await prisma.user.findUnique({ where: { id: userId as string } });
+  if (!user) {
+    throw new ApiError(404, 'User not found');
+  }
+
+  // Status ulte dewa (banned thakle unban hobe, active thakle ban hobe)
+  const updatedUser = await prisma.user.update({
+    where: { id: userId as string },
+    data: { isBanned: !user.isBanned }
+  });
+
+  return sendSuccess(res, 200, 'User ban status updated successfully', updatedUser);
 });

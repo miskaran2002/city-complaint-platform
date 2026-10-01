@@ -78,7 +78,7 @@ export const getAllComplaints = catchAsync(async (req: AuthRequest, res: Respons
   const complaints = await prisma.complaint.findMany({
     where: whereCondition,
     orderBy: { createdAt: 'desc' },
-    // 👇 এই include ব্লকটি যোগ করা হয়েছে সিটিজেনের ইনফো পাওয়ার জন্য
+    // 👇include info about the citizen who made the complaint
     include: {
       citizen: {
         select: {

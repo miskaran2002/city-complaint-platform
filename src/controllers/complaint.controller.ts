@@ -55,7 +55,7 @@ export const getAllComplaints = catchAsync(async (req: AuthRequest, res: Respons
   // 1. url into query parameters for filtering
   const { status, priority } = req.query; 
 
-  //2. Initialize the where condition for Prisma query
+  // 2. Initialize the where condition for Prisma query
   let whereCondition: any = { deletedAt: null }; 
 
   // 2. Role-based Access Logic
@@ -66,7 +66,7 @@ export const getAllComplaints = catchAsync(async (req: AuthRequest, res: Respons
   }
   //for CITY_ADMIN, no additional filtering is needed; they can see all complaints
 
-  // 3. 🔴 search/filter logic 🔴
+  // 3. search/filter logic
   if (status) {
     whereCondition.status = status;
   }
@@ -77,8 +77,16 @@ export const getAllComplaints = catchAsync(async (req: AuthRequest, res: Respons
   // 4. do the actual query to get complaints based on the constructed where condition
   const complaints = await prisma.complaint.findMany({
     where: whereCondition,
-    // include related data for better context
-    orderBy: { createdAt: 'desc' }
+    orderBy: { createdAt: 'desc' },
+    // 👇 এই include ব্লকটি যোগ করা হয়েছে সিটিজেনের ইনফো পাওয়ার জন্য
+    include: {
+      citizen: {
+        select: {
+          name: true,
+          email: true
+        }
+      }
+    }
   });
 
   res.status(200).json({

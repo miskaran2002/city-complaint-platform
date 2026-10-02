@@ -7,6 +7,7 @@ import { ApiError } from '../utils/ApiError.js';
 import { sendSuccess } from '../utils/ApiResponse.js';
 import { getBkashToken } from '../services/bkash.service.js';
 import { AuthRequest } from '../middlewares/auth.js'; // Import the AuthRequest interface
+import { stripe } from '../services/stripe.service.js';
 
 export const initiateBkashPayment = catchAsync(async (req: AuthRequest, res: Response) => {
   const { complaintId } = req.body;
@@ -144,4 +145,116 @@ export const bkashCallback = catchAsync(async (req: Request, res: Response) => {
   }
 
   throw new ApiError(400, 'Invalid payment request');
+});
+
+
+
+
+
+// ================= STRIPE INTEGRATION =================
+
+// 1. Initiate Stripe Payment
+export const initiateStripePayment = catchAsync(async (req: AuthRequest, res: Response) => {
+  const { complaintId } = req.body;
+  const citizenId = req.user.id;
+
+  // Check if the complaint exists
+  const complaint = await prisma.complaint.findUnique({
+    where: { id: complaintId, citizenId }
+  });
+
+  if (!complaint) {
+    throw new ApiError(404, 'Complaint not found');
+  }
+
+  const amount = 100; // Fixed at 100 BDT/USD equivalent for testing
+
+
+ // Create Stripe Checkout Session
+  // @ts-ignore
+  const session = await (stripe.checkout.sessions.create as any)({
+    payment_method_types: ['card'],
+    line_items: [
+      {
+        price_data: {
+          currency: 'bdt', 
+          product_data: {
+            name: `Emergency Service for Complaint #${complaintId.slice(0, 8)}`,
+            description: complaint.title,
+          },
+          unit_amount: amount * 100, 
+        },
+        quantity: 1,
+      },
+    ],
+    mode: 'payment',
+    success_url: `${process.env.FRONTEND_URL}/payment/success?session_id={CHECKOUT_SESSION_ID}&complaintId=${complaintId}`,
+    cancel_url: `${process.env.FRONTEND_URL}/payment/cancel`,
+    client_reference_id: complaintId,
+  });
+
+  if (!session || !session.url) {
+    throw new ApiError(500, 'Failed to create Stripe payment session');
+  }
+
+  // Save payment entry in the database
+  await prisma.payment.upsert({
+    where: { complaintId },
+    update: {
+      amount,
+      transactionId: session.id,
+      status: 'PENDING',
+      gateway: 'Stripe'
+    },
+    create: {
+      complaintId,
+      citizenId,
+      amount,
+      transactionId: session.id,
+      gateway: 'Stripe',
+      status: 'PENDING'
+    }
+  });
+
+  // Return the Stripe checkout URL to redirect the frontend
+  return sendSuccess(res, 200, 'Stripe payment initiated successfully', {
+    paymentUrl: session.url,
+    sessionId: session.id
+  });
+});
+
+
+// 2. Verify Stripe Payment (Called by frontend on success page)
+export const verifyStripePayment = catchAsync(async (req: AuthRequest, res: Response) => {
+  const { sessionId, complaintId } = req.body;
+
+  if (!sessionId || !complaintId) {
+    throw new ApiError(400, 'Session ID and Complaint ID are required');
+  }
+
+  // Retrieve the session from Stripe to ensure it was actually paid
+  const session = await stripe.checkout.sessions.retrieve(sessionId);
+
+  if (session.payment_status === 'paid') {
+    // Transaction: Update payment status + complaint priority
+    await prisma.$transaction(async (prismaClient) => {
+      await prismaClient.payment.update({
+        where: { transactionId: sessionId },
+        data: { 
+          status: 'PAID',
+          transactionId: session.payment_intent as string || sessionId
+        }
+      });
+
+      // Update complaint priority to EMERGENCY
+      await prismaClient.complaint.update({
+        where: { id: complaintId },
+        data: { priority: 'EMERGENCY' }
+      });
+    });
+
+    return sendSuccess(res, 200, 'Stripe payment verified and executed successfully', null);
+  } else {
+    throw new ApiError(400, 'Payment was not successful or is still pending');
+  }
 });

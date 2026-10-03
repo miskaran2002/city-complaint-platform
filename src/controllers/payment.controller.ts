@@ -84,23 +84,19 @@ export const initiateBkashPayment = catchAsync(async (req: AuthRequest, res: Res
 
 export const bkashCallback = catchAsync(async (req: Request, res: Response) => {
   const { paymentID, status } = req.query;
+  const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
 
-  // 1. Validate the query parameters
   if (status === 'cancel' || status === 'failure') {
     await prisma.payment.update({
       where: { transactionId: paymentID as string },
       data: { status: 'FAILED' }
     });
-    // frontend will redirect to failed page
-    return sendSuccess(res, 400, `Payment ${status}`, null); 
+    return res.redirect(`${frontendUrl}/citizen/payment/bkash-result?status=failed`);
   }
 
   if (status === 'success') {
     try {
-      // 2. Get the payment status from bKash's server
       const token = await getBkashToken();
-
-      // 3. Execute the payment to confirm it
       const { data } = await axios.post(
         `${process.env.BKASH_BASE_URL}/tokenized/checkout/execute`,
         { paymentID },
@@ -114,39 +110,30 @@ export const bkashCallback = catchAsync(async (req: Request, res: Response) => {
         }
       );
 
-      // 4. If the payment is successful, update the database (using Transaction)
       if (data && data.statusCode === '0000' && data.transactionStatus === 'Completed') {
-        
-        // Transaction: Update payment status + complaint priority
-        await prisma.$transaction(async (prismaClient) => {
+        const payment = await prisma.$transaction(async (prismaClient) => {
           const updatedPayment = await prismaClient.payment.update({
             where: { transactionId: paymentID as string },
-            data: { 
-              status: 'PAID', 
-              transactionId: data.trxID 
-            }
+            data: { status: 'PAID', transactionId: data.trxID }
           });
-
-          // complaint priority update to EMERGENCY if payment is successful
           await prismaClient.complaint.update({
             where: { id: updatedPayment.complaintId },
             data: { priority: 'EMERGENCY' }
           });
+          return updatedPayment;
         });
 
-        // frontend will redirect to success page
-        return sendSuccess(res, 200, 'Payment executed successfully', { trxId: data.trxID });
+        return res.redirect(`${frontendUrl}/citizen/payment/bkash-result?status=success&complaintId=${payment.complaintId}`);
       } else {
-        throw new ApiError(400, `Payment Execution Failed: ${data.statusMessage}`);
+        return res.redirect(`${frontendUrl}/citizen/payment/bkash-result?status=failed`);
       }
     } catch (error) {
-      throw new ApiError(500, 'Error while executing bKash payment');
+      return res.redirect(`${frontendUrl}/citizen/payment/bkash-result?status=failed`);
     }
   }
 
-  throw new ApiError(400, 'Invalid payment request');
+  return res.redirect(`${frontendUrl}/citizen/payment/bkash-result?status=failed`);
 });
-
 
 
 

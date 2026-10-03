@@ -3,7 +3,8 @@ import {
   initiateBkashPayment, 
   bkashCallback,
   initiateStripePayment,
-  verifyStripePayment
+  verifyStripePayment,
+  getMyPayments
 } from '../controllers/payment.controller.js';
 import { authenticate, authorize } from '../middlewares/auth.js'; 
 
@@ -19,5 +20,8 @@ router.post('/stripe/create', authenticate, authorize('CITIZEN'), initiateStripe
 
 // Route to verify Stripe payment from frontend success page
 router.post('/stripe/verify', authenticate, authorize('CITIZEN'), verifyStripePayment);
+
+
+router.get('/', authenticate, authorize('CITIZEN'), getMyPayments);
 
 export default router;

@@ -279,3 +279,15 @@ export const verifyStripePayment = catchAsync(async (req: AuthRequest, res: Resp
     throw new ApiError(400, 'Payment was not successful or is still pending');
   }
 });
+
+// 3. Get Payment History for the authenticated citizen
+export const getMyPayments = catchAsync(async (req: AuthRequest, res: Response) => {
+  const citizenId = req.user.id;
+
+  const payments = await prisma.payment.findMany({
+    where: { citizenId },
+    orderBy: { createdAt: 'desc' }
+  });
+
+  return sendSuccess(res, 200, 'Payment history retrieved successfully', payments);
+});

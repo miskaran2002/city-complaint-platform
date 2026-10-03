@@ -78,12 +78,16 @@ export const getAllComplaints = catchAsync(async (req: AuthRequest, res: Respons
   const complaints = await prisma.complaint.findMany({
     where: whereCondition,
     orderBy: { createdAt: 'desc' },
-    // 👇include info about the citizen who made the complaint
     include: {
       citizen: {
         select: {
           name: true,
           email: true
+        }
+      },
+      category: { // 👈 Ekhane category name fetch korar jonno eta add kora holo
+        select: {
+          name: true
         }
       }
     }

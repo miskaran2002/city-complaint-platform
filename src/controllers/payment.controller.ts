@@ -158,7 +158,7 @@ export const initiateStripePayment = catchAsync(async (req: AuthRequest, res: Re
   const { complaintId } = req.body;
   const citizenId = req.user.id;
 
-  // Check if the complaint exists
+  // 1. Check if the complaint exists
   const complaint = await prisma.complaint.findUnique({
     where: { id: complaintId, citizenId }
   });
@@ -167,29 +167,41 @@ export const initiateStripePayment = catchAsync(async (req: AuthRequest, res: Re
     throw new ApiError(404, 'Complaint not found');
   }
 
-  const amount = 100; // Fixed at 100 BDT/USD equivalent for testing
+  // ✅ নতুন লজিক: পেমেন্ট অলরেডি PAID হয়ে থাকলে ব্লক করবে
+  const existingPayment = await prisma.payment.findUnique({
+    where: { complaintId }
+  });
 
+  if (existingPayment && existingPayment.status === 'PAID') {
+    throw new ApiError(400, 'Payment for this complaint is already completed.');
+  }
 
- // Create Stripe Checkout Session
+  // 2. Stripe Payment Setup
+  const amount = 5; // Stripe টেস্টের জন্য 5 USD সেট করা হলো (500 সেন্টস)
+  
+  // ফলব্যাক URL, যদি .env তে FRONTEND_URL না থাকে তবে লোকালহোস্ট কাজ করবে
+  const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+
+  // 3. Create Stripe Checkout Session
   // @ts-ignore
   const session = await (stripe.checkout.sessions.create as any)({
-    payment_method_types: ['card'],
+    
     line_items: [
       {
         price_data: {
-          currency: 'bdt', 
+          currency: 'usd', // 👈 'bdt' এর বদলে 'usd' ব্যবহার করা নিরাপদ 
           product_data: {
-            name: `Emergency Service for Complaint #${complaintId.slice(0, 8)}`,
+            name: `Emergency Service #${complaintId.slice(0, 8)}`,
             description: complaint.title,
           },
-          unit_amount: amount * 100, 
+          unit_amount: amount * 100, // Stripe expects amount in cents (5 * 100 = 500)
         },
         quantity: 1,
       },
     ],
     mode: 'payment',
-    success_url: `${process.env.FRONTEND_URL}/payment/success?session_id={CHECKOUT_SESSION_ID}&complaintId=${complaintId}`,
-    cancel_url: `${process.env.FRONTEND_URL}/payment/cancel`,
+    success_url: `${frontendUrl}/citizen/payment?session_id={CHECKOUT_SESSION_ID}&complaintId=${complaintId}`,
+    cancel_url: `${frontendUrl}/citizen/dashboard`,
     client_reference_id: complaintId,
   });
 
@@ -197,7 +209,7 @@ export const initiateStripePayment = catchAsync(async (req: AuthRequest, res: Re
     throw new ApiError(500, 'Failed to create Stripe payment session');
   }
 
-  // Save payment entry in the database
+  // 4. Save payment entry in the database
   await prisma.payment.upsert({
     where: { complaintId },
     update: {
@@ -216,7 +228,7 @@ export const initiateStripePayment = catchAsync(async (req: AuthRequest, res: Re
     }
   });
 
-  // Return the Stripe checkout URL to redirect the frontend
+  // 5. Return the Stripe checkout URL to redirect the frontend
   return sendSuccess(res, 200, 'Stripe payment initiated successfully', {
     paymentUrl: session.url,
     sessionId: session.id

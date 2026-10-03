@@ -25,11 +25,12 @@ const router = Router();
 // Apply authentication middleware to all routes in this file
 router.use(authenticate);
 
-// 1. Only a CITIZEN can create a complaint
+// 1. Only a CITIZEN can create a complaint (with optional image upload)
 router.post(
   '/', 
   authorize('CITIZEN'), 
   complaintLimiter,
+  upload.single('image'),
   validate(createComplaintSchema), 
   createComplaint
 );
@@ -68,13 +69,6 @@ router.post(
 );
 
 
-//8. Only a CITIZEN can create a complaint
-router.post(
-  '/', 
-  authorize('CITIZEN'), 
-  upload.single('image'), // 🔴 image  🔴
-  validate(createComplaintSchema), 
-  createComplaint
-);
+
 
 export default router;

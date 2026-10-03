@@ -244,6 +244,15 @@ export const verifyStripePayment = catchAsync(async (req: AuthRequest, res: Resp
     throw new ApiError(400, 'Session ID and Complaint ID are required');
   }
 
+  // ✅ Idempotency check: payment আগে থেকেই PAID থাকলে আবার error না দিয়ে success রিটার্ন করো
+  const existingPayment = await prisma.payment.findUnique({
+    where: { complaintId }
+  });
+
+  if (existingPayment && existingPayment.status === 'PAID') {
+    return sendSuccess(res, 200, 'Payment already verified', null);
+  }
+
   // Retrieve the session from Stripe to ensure it was actually paid
   const session = await stripe.checkout.sessions.retrieve(sessionId);
 
@@ -251,7 +260,7 @@ export const verifyStripePayment = catchAsync(async (req: AuthRequest, res: Resp
     // Transaction: Update payment status + complaint priority
     await prisma.$transaction(async (prismaClient) => {
       await prismaClient.payment.update({
-        where: { transactionId: sessionId },
+        where: { complaintId }, // ✅ sessionId এর বদলে complaintId দিয়ে খোঁজা (stable, কখনো বদলায় না)
         data: { 
           status: 'PAID',
           transactionId: session.payment_intent as string || sessionId

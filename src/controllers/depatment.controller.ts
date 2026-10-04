@@ -5,7 +5,8 @@ import { catchAsync } from '../utils/catchAsync.js';
 import { ApiError } from '../utils/ApiError.js';
 
 export const createDepartment = catchAsync(async (req: Request, res: Response) => {
-  const { name, code, description } = req.body;
+  // 🔴 image url field is optional
+  const { name, code, description, imageUrl } = req.body;
 
   // Check if a department with the same code already exists
   const existingDept = await prisma.department.findUnique({ where: { code } });
@@ -14,7 +15,7 @@ export const createDepartment = catchAsync(async (req: Request, res: Response) =
   }
 
   const department = await prisma.department.create({
-    data: { name, code, description },
+    data: { name, code, description, imageUrl }, // 🔴 for database save
   });
 
   return sendSuccess(res, 201, 'Department created successfully', department);
@@ -26,4 +27,26 @@ export const getAllDepartments = catchAsync(async (req: Request, res: Response) 
   });
 
   return sendSuccess(res, 200, 'Departments retrieved successfully', departments);
+});
+
+// 🔴 for single department
+export const getSingleDepartment = catchAsync(async (req: Request, res: Response) => {
+  const { id } = req.params;
+  
+  const department = await prisma.department.findUnique({
+    where: { id: id as string },
+    include: { 
+      categories: true, 
+      users: {
+        select: { id: true, name: true, email: true, role: true } 
+      }, 
+      complaints: true 
+    },
+  });
+
+  if (!department) {
+    throw new ApiError(404, 'Department not found');
+  }
+
+  return sendSuccess(res, 200, 'Department retrieved successfully', department);
 });

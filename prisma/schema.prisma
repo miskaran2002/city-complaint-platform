@@ -73,7 +73,7 @@ model Department {
   code        String      @unique
   description String?
   createdAt   DateTime    @default(now())
-
+  imageUrl    String?
   users       User[]
   categories  Category[]
   complaints  Complaint[]
@@ -85,7 +85,7 @@ model Category {
   departmentId String
   description  String?
   createdAt    DateTime    @default(now())
-
+  imageUrl     String?
   department   Department  @relation(fields: [departmentId], references: [id])
   complaints   Complaint[]
 }

@@ -103,6 +103,9 @@ export const updateUserRole = catchAsync(async (req: AuthRequest, res: Response)
 
 // ৩. Get Dashboard Statistics
 export const getDashboardStats = catchAsync(async (req: AuthRequest, res: Response) => {
+  // ==========================================
+  // ১. Basic Counts 
+  // ==========================================
   const totalUsers = await prisma.user.count({ where: { isDeleted: false } });
   const totalComplaints = await prisma.complaint.count();
   
@@ -116,17 +119,101 @@ export const getDashboardStats = catchAsync(async (req: AuthRequest, res: Respon
     _sum: { amount: true },
   });
 
+  // ==========================================
+  // ২. Users By Role (Pie Chart এর জন্য)
+  // ==========================================
+  const usersGrouped = await prisma.user.groupBy({
+    by: ['role'],
+    _count: { role: true },
+    where: { isDeleted: false },
+  });
+  
+  
+  const roleColors: Record<string, string> = {
+    CITIZEN: '#8B5CF6',
+    DEPARTMENT_STAFF: '#10B981',
+    TECHNICIAN: '#F59E0B',
+    DEPARTMENT_MANAGER: '#3B82F6',
+    CITY_ADMIN: '#EF4444',
+  };
+
+  const byRole = usersGrouped.map((item) => ({
+    name: item.role.replace('_', ' '), 
+    value: item._count.role,
+    color: roleColors[item.role] || '#CBD5E1',
+  }));
+
+  // ==========================================
+  // ৩. Departments & Category Count (Bar Chart )
+  // ==========================================
+  const totalDepartments = await prisma.department.count();
+  const departmentsData = await prisma.department.findMany({
+    include: {
+      _count: {
+        select: { categories: true }, 
+      },
+    },
+  });
+
+  const categoryCount = departmentsData.map((dept) => ({
+    name: dept.code, 
+    categories: dept._count.categories,
+  }));
+
+  // ==========================================
+  // ৪. Monthly Revenue Trend (Area Chart )
+  // ==========================================
+  
+  const sixMonthsAgo = new Date();
+  sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 5);
+  sixMonthsAgo.setDate(1); 
+
+  const recentPayments = await prisma.payment.findMany({
+    where: { 
+      status: 'PAID',
+      createdAt: { gte: sixMonthsAgo }
+    },
+    select: { amount: true, createdAt: true },
+    orderBy: { createdAt: 'asc' }
+  });
+
+  const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const monthlyMap = new Map<string, number>();
+
+  recentPayments.forEach((payment) => {
+    const monthStr = monthNames[payment.createdAt.getMonth()];
+    const currentAmt = monthlyMap.get(monthStr) || 0;
+    monthlyMap.set(monthStr, currentAmt + Number(payment.amount));
+  });
+
+  // Map to Array for Chart
+  const monthlyTrend = Array.from(monthlyMap, ([month, amount]) => ({ month, amount }));
+
+  // ==========================================
+  // ৫. Final Response Return
+  // ==========================================
   return sendSuccess(res, 200, 'Dashboard statistics retrieved successfully', {
-    users: { total: totalUsers },
+    users: { 
+      total: totalUsers,
+      byRole: byRole // 🔴 dynamic
+    },
     complaints: {
       total: totalComplaints,
       pending: pendingComplaints,
       inProgress: inProgressComplaints,
       resolved: resolvedComplaints,
     },
+    departments: {
+      total: totalDepartments,
+      categoryCount: categoryCount // 🔴 dynamic department data
+    },
     payments: {
       successful: successfulPayments,
       totalRevenue: paymentsSum._sum.amount || 0,
+      monthlyTrend: monthlyTrend.length > 0 ? monthlyTrend : [
+        // if no payments in the last 6 months, return default data
+        { month: 'No Data', amount: 0 } 
+      ] 
     },
   });
 });

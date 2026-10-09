@@ -52,21 +52,30 @@ export const createComplaint = catchAsync(async (req: AuthRequest, res: Response
 export const getAllComplaints = catchAsync(async (req: AuthRequest, res: Response) => {
   const { role, id: userId, departmentId } = req.user;
   
-  // 1. url into query parameters for filtering
+  // 1. URL query parameters for filtering
   const { status, priority } = req.query; 
 
   // 2. Initialize the where condition for Prisma query
   let whereCondition: any = { deletedAt: null }; 
 
-  // 2. Role-based Access Logic
+  // 3. Role-based Access & Payment Visibility Logic
   if (role === 'CITIZEN') {
+    // Citizen can see all their own complaints (both paid & unpaid emergency complaints)
     whereCondition.citizenId = userId; 
-  } else if (role === 'DEPARTMENT_MANAGER' || role === 'DEPARTMENT_STAFF' || role === 'TECHNICIAN') {
-    whereCondition.departmentId = departmentId;
-  }
-  //for CITY_ADMIN, no additional filtering is needed; they can see all complaints
+  } else {
+    // Non-citizens (Admin, Manager, Staff, Tech) only see paid complaints OR regular non-emergency complaints
+    whereCondition.OR = [
+      { isPaid: true },
+      { priority: { not: 'EMERGENCY' } }
+    ];
 
-  // 3. search/filter logic
+    if (role === 'DEPARTMENT_MANAGER' || role === 'DEPARTMENT_STAFF' || role === 'TECHNICIAN') {
+      whereCondition.departmentId = departmentId;
+    }
+    // CITY_ADMIN gets no department restriction, but unpaid emergency complaints are still hidden
+  }
+
+  // 4. Search / Filter logic
   if (status) {
     whereCondition.status = status;
   }
@@ -74,7 +83,7 @@ export const getAllComplaints = catchAsync(async (req: AuthRequest, res: Respons
     whereCondition.priority = priority;
   }
 
-  // 4. do the actual query to get complaints based on the constructed where condition
+  // 5. Execute Prisma query
   const complaints = await prisma.complaint.findMany({
     where: whereCondition,
     orderBy: { createdAt: 'desc' },
@@ -85,15 +94,21 @@ export const getAllComplaints = catchAsync(async (req: AuthRequest, res: Respons
           email: true
         }
       },
-      category: { // 👈 Ekhane category name fetch korar jonno eta add kora holo
+      category: {
         select: {
           name: true
         }
-      }
+      },
+      department: {
+        select: {
+          name: true
+        }
+      },
+      payment: true // Payment status details include kora holo
     }
   });
 
-  res.status(200).json({
+  return res.status(200).json({
     success: true,
     message: 'Complaints retrieved successfully',
     meta: {

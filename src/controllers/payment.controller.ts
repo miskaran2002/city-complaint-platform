@@ -135,7 +135,12 @@ export const bkashCallback = catchAsync(async (req: Request, res: Response) => {
           
           await prismaClient.complaint.update({
             where: { id: updatedPayment.complaintId },
-            data: { priority: 'EMERGENCY' }
+            data: { 
+              priority: 'EMERGENCY'
+              isPaid: true,
+
+
+             }
           });
           
           return updatedPayment;
@@ -279,7 +284,10 @@ export const verifyStripePayment = catchAsync(async (req: AuthRequest, res: Resp
       // Elevate complaint priority to EMERGENCY
       await prismaClient.complaint.update({
         where: { id: complaintId },
-        data: { priority: 'EMERGENCY' }
+        data: { 
+          priority: 'EMERGENCY',
+          isPaid: true
+        }
       });
     });
 

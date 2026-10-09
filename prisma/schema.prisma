@@ -116,6 +116,7 @@ model Complaint {
   statusLogs   StatusLog[]
   auditLogs AuditLog[]
   payment      Payment?
+  isPaid        Boolean       @default(false)
   feedback     Feedback?
 
   @@index([status, categoryId])

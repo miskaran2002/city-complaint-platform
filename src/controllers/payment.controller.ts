@@ -214,6 +214,8 @@ export const bkashCallback = catchAsync(async (req: Request, res: Response) => {
 
 // ================= STRIPE INTEGRATION =================
 
+// payment.controller.ts er bhetore, purono initiateStripePayment er jaygay boshan
+
 // 1. Initiate Stripe Payment
 export const initiateStripePayment = catchAsync(async (req: AuthRequest, res: Response) => {
   const { complaintId } = req.body;
@@ -226,29 +228,39 @@ export const initiateStripePayment = catchAsync(async (req: AuthRequest, res: Re
   const frontendUrl = getSanitizedFrontendUrl();
 
   // 2. Create Stripe Checkout Session
-  // @ts-ignore
-  const session = await (stripe.checkout.sessions.create as any)({
-    line_items: [
-      {
-        price_data: {
-          currency: 'usd',
-          product_data: {
-            name: `Emergency Service Upgrade #${complaintId.slice(0, 8)}`,
-            description: complaint.title
+  // Stripe er nijer error (jemon "Invalid API Key") er status 401 hoy.
+  // Seta sorasori frontend e gele axios mone kore user logout hoyeche -> login loop.
+  // Tai ekhane catch kore 502 hishebe pathachhi.
+  let session: any;
+  try {
+    // @ts-ignore
+    session = await (stripe.checkout.sessions.create as any)({
+      line_items: [
+        {
+          price_data: {
+            currency: 'usd',
+            product_data: {
+              name: `Emergency Service Upgrade #${complaintId.slice(0, 8)}`,
+              description: complaint.title
+            },
+            unit_amount: amount * 100 // Stripe expects amount in cents
           },
-          unit_amount: amount * 100 // Stripe expects amount in cents
-        },
-        quantity: 1
-      }
-    ],
-    mode: 'payment',
-    success_url: `${frontendUrl}/citizen/payments?session_id={CHECKOUT_SESSION_ID}&complaintId=${complaintId}&status=success`,
-    cancel_url: `${frontendUrl}/citizen/payments?status=cancelled&complaintId=${complaintId}`,
-    client_reference_id: complaintId
-  });
+          quantity: 1
+        }
+      ],
+      mode: 'payment',
+      success_url: `${frontendUrl}/citizen/payments?session_id={CHECKOUT_SESSION_ID}&complaintId=${complaintId}&status=success`,
+      cancel_url: `${frontendUrl}/citizen/payments?status=cancelled&complaintId=${complaintId}`,
+      client_reference_id: complaintId
+    });
+  } catch (e: any) {
+    // Asol karon server console e dekha jabe (key vul hole ekhane "Invalid API Key" ashbe)
+    console.error('Stripe create session error:', e?.message || e);
+    throw new ApiError(502, 'Payment service error. Please try again later.');
+  }
 
   if (!session || !session.url) {
-    throw new ApiError(500, 'Failed to create Stripe payment session');
+    throw new ApiError(502, 'Failed to create Stripe payment session');
   }
 
   // 3. Save payment entry (switching bKash -> Stripe replaces the old transactionId)

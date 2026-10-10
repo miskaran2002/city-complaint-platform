@@ -17,6 +17,7 @@ enum Role {
 }
 
 enum ComplaintStatus {
+  PENDING_PAYMENT 
   PENDING
   ASSIGNED
   IN_PROGRESS

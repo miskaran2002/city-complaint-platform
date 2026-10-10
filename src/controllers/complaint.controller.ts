@@ -6,14 +6,12 @@ import { ApiError } from '../utils/ApiError.js';
 import { AuthRequest } from '../middlewares/auth.js';
 import { uploadToCloudinary } from '../utils/uploadToCloudinary.js';
 
-
-
-// 1. Create a new Complaint
+/// 1. Create a new Complaint
 export const createComplaint = catchAsync(async (req: AuthRequest, res: Response) => {
-  const citizenId = req.user.id; // logged in - citizen ID
+  const citizenId = req.user.id;
   const { title, description, categoryId, address, latitude, longitude, priority } = req.body;
 
-  // check if the category exists and get its departmentId
+  // Check if the category exists and get its departmentId
   const category = await prisma.category.findUnique({
     where: { id: categoryId }
   });
@@ -22,63 +20,73 @@ export const createComplaint = catchAsync(async (req: AuthRequest, res: Response
     throw new ApiError(404, 'Category not found');
   }
 
-  // 🔴 Handle image upload: if a file is provided by Postman or frontend 🔴
-  let imageUrl = req.body.imageUrl; // if image is provided in the request body
+  // Handle image upload
+  let imageUrl = req.body.imageUrl;
   if (req.file) {
-    // Upload the image to Cloudinary and get the secure URL
     imageUrl = await uploadToCloudinary(req.file.buffer, 'city-complaints');
   }
 
-  // create the complaint (department ID will be automatically added from the category)
+  const isEmergency = priority === 'EMERGENCY';
+
+  // Create complaint record
+  // EMERGENCY -> PENDING_PAYMENT (hidden from staff/admin until payment is completed)
+  // Others    -> PENDING (submitted immediately)
   const complaint = await prisma.complaint.create({
     data: {
       title,
       description,
       categoryId,
-      departmentId: category.departmentId, 
+      departmentId: category.departmentId,
       citizenId,
       address,
-      latitude: latitude ? parseFloat(latitude) : null,   // string to float conversion for latitude
-      longitude: longitude ? parseFloat(longitude) : null, // string to float conversion for longitude
-      imageUrl, // cloudainary with secure URL
-      priority: priority || 'LOW'
+      latitude: latitude ? parseFloat(latitude) : null,
+      longitude: longitude ? parseFloat(longitude) : null,
+      imageUrl,
+      priority: priority || 'LOW',
+      isPaid: false,
+      status: isEmergency ? 'PENDING_PAYMENT' : 'PENDING'
     }
   });
 
-  return sendSuccess(res, 201, 'Complaint submitted successfully', complaint);
+  return sendSuccess(
+    res,
+    201,
+    isEmergency
+      ? 'Complaint saved. Complete payment to submit it.'
+      : 'Complaint submitted successfully',
+    { ...complaint, requiresPayment: isEmergency }
+  );
 });
 
-// 2. Get All Complaints (With Pagination, Filter, Search, and Role-based access)
+// 2. Get All Complaints (Filter + Role-based access)
 export const getAllComplaints = catchAsync(async (req: AuthRequest, res: Response) => {
   const { role, id: userId, departmentId } = req.user;
-  
+
   // 1. URL query parameters for filtering
-  const { status, priority } = req.query; 
+  const { status, priority } = req.query;
+  const statusQ = status as string | undefined;
 
   // 2. Initialize the where condition for Prisma query
-  let whereCondition: any = { deletedAt: null }; 
+  const whereCondition: any = { deletedAt: null };
 
-  // 3. Role-based Access & Payment Visibility Logic
+  // 3. Role-based access & payment visibility
   if (role === 'CITIZEN') {
-    // Citizen can see all their own complaints (both paid & unpaid emergency complaints)
-    whereCondition.citizenId = userId; 
+    whereCondition.citizenId = userId;
+    // Citizen sees own unpaid drafts only if they explicitly filter for PENDING_PAYMENT
+    whereCondition.status = statusQ ?? { not: 'PENDING_PAYMENT' };
   } else {
-    // Non-citizens (Admin, Manager, Staff, Tech) only see paid complaints OR regular non-emergency complaints
-    whereCondition.OR = [
-      { isPaid: true },
-      { priority: { not: 'EMERGENCY' } }
-    ];
+    // Admin / Manager / Staff / Technician never see PENDING_PAYMENT complaints
+    whereCondition.status =
+      statusQ && statusQ !== 'PENDING_PAYMENT'
+        ? statusQ
+        : { not: 'PENDING_PAYMENT' };
 
-    if (role === 'DEPARTMENT_MANAGER' || role === 'DEPARTMENT_STAFF' || role === 'TECHNICIAN') {
+    if (role !== 'CITY_ADMIN') {
       whereCondition.departmentId = departmentId;
     }
-    // CITY_ADMIN gets no department restriction, but unpaid emergency complaints are still hidden
   }
 
-  // 4. Search / Filter logic
-  if (status) {
-    whereCondition.status = status;
-  }
+  // 4. Priority filter
   if (priority) {
     whereCondition.priority = priority;
   }
@@ -104,7 +112,7 @@ export const getAllComplaints = catchAsync(async (req: AuthRequest, res: Respons
           name: true
         }
       },
-      payment: true // Payment status details include kora holo
+      payment: true
     }
   });
 
@@ -112,12 +120,11 @@ export const getAllComplaints = catchAsync(async (req: AuthRequest, res: Respons
     success: true,
     message: 'Complaints retrieved successfully',
     meta: {
-      total: complaints.length,
+      total: complaints.length
     },
     data: complaints
   });
 });
-// Add this below your existing functions (createComplaint & getAllComplaints)
 
 // 3. Get Single Complaint
 export const getSingleComplaint = catchAsync(async (req: AuthRequest, res: Response) => {
@@ -127,7 +134,8 @@ export const getSingleComplaint = catchAsync(async (req: AuthRequest, res: Respo
     where: { id },
     include: {
       category: { select: { name: true } },
-      department: { select: { name: true } }
+      department: { select: { name: true } },
+      payment: true
     }
   });
 
@@ -140,13 +148,17 @@ export const getSingleComplaint = catchAsync(async (req: AuthRequest, res: Respo
     throw new ApiError(403, 'You do not have permission to view this complaint');
   }
 
+  // Unpaid emergency drafts are invisible to everyone except the owner citizen
+  if (req.user.role !== 'CITIZEN' && complaint.status === 'PENDING_PAYMENT') {
+    throw new ApiError(404, 'Complaint not found');
+  }
+
   return sendSuccess(res, 200, 'Complaint retrieved successfully', complaint);
 });
 
 // 4. Update Complaint (Citizen only)
 export const updateComplaint = catchAsync(async (req: AuthRequest, res: Response) => {
   const id = req.params.id as string;
-  const updateData = req.body;
 
   const complaint = await prisma.complaint.findUnique({ where: { id } });
 
@@ -163,6 +175,16 @@ export const updateComplaint = catchAsync(async (req: AuthRequest, res: Response
   if (complaint.status !== 'PENDING') {
     throw new ApiError(400, 'You can only update complaints that are in PENDING status');
   }
+
+  // Whitelist fields so nobody can change isPaid / priority / status via the request body
+  const { title, description, address, latitude, longitude, imageUrl } = req.body;
+  const updateData: any = {};
+  if (title !== undefined) updateData.title = title;
+  if (description !== undefined) updateData.description = description;
+  if (address !== undefined) updateData.address = address;
+  if (latitude !== undefined) updateData.latitude = latitude ? parseFloat(latitude) : null;
+  if (longitude !== undefined) updateData.longitude = longitude ? parseFloat(longitude) : null;
+  if (imageUrl !== undefined) updateData.imageUrl = imageUrl;
 
   const updatedComplaint = await prisma.complaint.update({
     where: { id },
@@ -190,28 +212,21 @@ export const deleteComplaint = catchAsync(async (req: AuthRequest, res: Response
   // Soft Delete: Just set the deletedAt timestamp instead of actual deletion
   await prisma.complaint.update({
     where: { id },
-    data: { deletedAt: new Date() } // Record the time of deletion
+    data: { deletedAt: new Date() }
   });
 
   return sendSuccess(res, 200, 'Complaint deleted successfully', null);
 });
 
-
-
-
-
-
-
-
 // 6. Assign Staff to a Complaint (Admin, Manager, Staff)
 export const assignStaff = catchAsync(async (req: AuthRequest, res: Response) => {
   const complaintId = req.params.id as string;
   const { technicianId, notes } = req.body;
-  
+
   const assignerId = req.user.id;
   const assignerRole = req.user.role;
 
-  // 🔴 Update: Extract departmentId from the assigner user object 🔴
+  // Extract departmentId from the assigner user object
   const assigner = await prisma.user.findUnique({
     where: { id: assignerId },
     select: { departmentId: true }
@@ -232,21 +247,17 @@ export const assignStaff = catchAsync(async (req: AuthRequest, res: Response) =>
     throw new ApiError(404, 'Complaint not found');
   }
 
-  // 🔴 Update: Security Check - Manager/Staff can only assign to their own department's complaints 🔴
+  // Unpaid emergency complaints cannot be assigned
+  if (complaint.status === 'PENDING_PAYMENT') {
+    throw new ApiError(400, 'Cannot assign: payment for this complaint is not completed');
+  }
+
+  // Security Check - Manager/Staff can only assign to their own department's complaints
   if (assignerRole !== 'CITY_ADMIN') {
     if (assignerDeptId !== complaint.departmentId) {
       throw new ApiError(403, 'You can only assign staff to complaints within your own department');
     }
   }
-
-
-
-
-
-
-
-
-
 
   // 2. Verify if the technician exists and is actually a TECHNICIAN
   const technician = await prisma.user.findUnique({
@@ -259,11 +270,11 @@ export const assignStaff = catchAsync(async (req: AuthRequest, res: Response) =>
 
   // Business Logic: Technician must belong to the same department as the complaint
   if (technician.departmentId !== complaint.departmentId) {
-    throw new ApiError(400, 'Technician does not belong to the complaint\'s department');
+    throw new ApiError(400, "Technician does not belong to the complaint's department");
   }
 
   // 3. Perform Transaction (Create Assignment, Update Status, Create Log)
-  const [assignment, updatedComplaint, log] = await prisma.$transaction([
+  const [assignment, updatedComplaint] = await prisma.$transaction([
     // A. Create the assignment record
     prisma.assignment.create({
       data: {
@@ -295,6 +306,7 @@ export const assignStaff = catchAsync(async (req: AuthRequest, res: Response) =>
     complaint: updatedComplaint
   });
 });
+
 // 7. Update Complaint Status by Technician (IN_PROGRESS or RESOLVED)
 export const updateComplaintStatus = catchAsync(async (req: AuthRequest, res: Response) => {
   const complaintId = req.params.id as string;
@@ -307,13 +319,16 @@ export const updateComplaintStatus = catchAsync(async (req: AuthRequest, res: Re
   }
 
   // 2. Check the complaint
-
   const complaint = await prisma.complaint.findUnique({
     where: { id: complaintId }
   });
 
   if (!complaint || complaint.deletedAt !== null) {
     throw new ApiError(404, 'Complaint not found');
+  }
+
+  if (complaint.status === 'PENDING_PAYMENT') {
+    throw new ApiError(400, 'Payment for this complaint is not completed');
   }
 
   // 3. Security Check: Is this complaint actually assigned to this technician?
@@ -331,7 +346,7 @@ export const updateComplaintStatus = catchAsync(async (req: AuthRequest, res: Re
   const oldStatus = complaint.status;
 
   // 4. Update status and create log within a transaction
-  const [updatedComplaint, statusLog] = await prisma.$transaction([
+  const [updatedComplaint] = await prisma.$transaction([
     prisma.complaint.update({
       where: { id: complaintId },
       data: { status }
@@ -351,7 +366,6 @@ export const updateComplaintStatus = catchAsync(async (req: AuthRequest, res: Re
     complaint: updatedComplaint
   });
 });
-
 
 // 8. Submit Feedback (Citizen Only)
 export const submitFeedback = catchAsync(async (req: AuthRequest, res: Response) => {
@@ -404,7 +418,3 @@ export const submitFeedback = catchAsync(async (req: AuthRequest, res: Response)
 
   return sendSuccess(res, 201, 'Feedback submitted successfully', feedback);
 });
-
-
-
-

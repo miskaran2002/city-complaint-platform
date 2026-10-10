@@ -58,35 +58,45 @@ export const createComplaint = catchAsync(async (req: AuthRequest, res: Response
   );
 });
 
-// 2. Get All Complaints (Filter + Role-based access)
+// 2. Get All Complaints (With Pagination, Filter, Search, and Role-based access)
 export const getAllComplaints = catchAsync(async (req: AuthRequest, res: Response) => {
   const { role, id: userId, departmentId } = req.user;
-
+  
   // 1. URL query parameters for filtering
-  const { status, priority } = req.query;
-  const statusQ = status as string | undefined;
+  const { status, priority } = req.query; 
 
   // 2. Initialize the where condition for Prisma query
-  const whereCondition: any = { deletedAt: null };
+  let whereCondition: any = { deletedAt: null }; 
 
-  // 3. Role-based access & payment visibility
+  // 3. Role-based Access & Payment Visibility Logic
   if (role === 'CITIZEN') {
-    whereCondition.citizenId = userId;
-    // Citizen sees own unpaid drafts only if they explicitly filter for PENDING_PAYMENT
-    whereCondition.status = statusQ ?? { not: 'PENDING_PAYMENT' };
-  } else {
-    // Admin / Manager / Staff / Technician never see PENDING_PAYMENT complaints
-    whereCondition.status =
-      statusQ && statusQ !== 'PENDING_PAYMENT'
-        ? statusQ
-        : { not: 'PENDING_PAYMENT' };
+    // Citizen can see all their own complaints
+    whereCondition.citizenId = userId; 
+  } 
+  else if (role === 'TECHNICIAN') {
+    // 🔴 FIXED (Issue 2 & 3): Technician ONLY sees complaints assigned to them
+    whereCondition.assignments = {
+      some: { technicianId: userId }
+    };
+  } 
+  else {
+    // Admin, Manager, Staff (Hide unpaid emergency complaints)
+    whereCondition.OR = [
+      { isPaid: true },
+      { priority: { not: 'EMERGENCY' } }
+    ];
 
-    if (role !== 'CITY_ADMIN') {
+    // Staff & Manager only see their own department's complaints
+    if (role === 'DEPARTMENT_MANAGER' || role === 'DEPARTMENT_STAFF') {
       whereCondition.departmentId = departmentId;
     }
+    // CITY_ADMIN gets no department restriction
   }
 
-  // 4. Priority filter
+  // 4. Search / Filter logic
+  if (status) {
+    whereCondition.status = status;
+  }
   if (priority) {
     whereCondition.priority = priority;
   }
@@ -112,7 +122,7 @@ export const getAllComplaints = catchAsync(async (req: AuthRequest, res: Respons
           name: true
         }
       },
-      payment: true
+      payment: true // Payment status details
     }
   });
 
@@ -120,12 +130,11 @@ export const getAllComplaints = catchAsync(async (req: AuthRequest, res: Respons
     success: true,
     message: 'Complaints retrieved successfully',
     meta: {
-      total: complaints.length
+      total: complaints.length,
     },
     data: complaints
   });
 });
-
 // 3. Get Single Complaint
 export const getSingleComplaint = catchAsync(async (req: AuthRequest, res: Response) => {
   const id = req.params.id as string;
